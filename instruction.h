@@ -18,7 +18,7 @@ typedef unsigned __int32 uint32_t;
 void fetch(Core* core,IM* inst_mem);
 void decode(Core* core);
 void execute(Core* core);
-void memory(Core* core, Cache* cache, uint32_t* MM, Bus* bus, struct WatchFlag** watch);
+void memory(Core* core, Cache* cache, Bus* bus, struct WatchFlag** watch);
 enum State writeBack(Core* core);
 
 #endif /* INSTRUCTION_H_ */

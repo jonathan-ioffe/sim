@@ -151,27 +151,63 @@ void execute(Core* core){
 }
 
 
-void get_data_from_memory(Core* core, Instruction* inst, Cache* cache, uint32_t* MM, Bus* bus, uint32_t addr)
+void get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, Bus* bus, uint32_t addr, unsigned short is_get, unsigned short is_sc_cmd)
 {
 	if (is_data_in_cache(cache, addr))
 	{
-		printf("performing cache load\n");
-		inst->rd = get_data_from_cache(cache, addr);
+		printf("performing cache load/set\n");
+		if (is_get == 1)
+		{
+			inst->rd = get_data_from_cache(cache, addr);
+		}
+		else
+		{
+			set_data_to_cache(cache, addr, inst->rd, 1);
+			if (is_sc_cmd)
+			{
+				inst->rd = 1;
+			}
+		}
 	}
 	else {
 		/* the data is ready on the bus */
-		if (is_data_ready_from_bus(bus, addr)) {
-			printf("performing bus load\n");
-			int32_t data = get_data_from_bus(bus);
-			inst->rd = data;
-			free_bus_line(bus);
-			set_data_to_cache(cache, addr, data, 0);
+		if (is_data_ready_from_bus(bus, core->core_id, addr)) {
+			printf("performing bus load/set\n");
+			/* TODO maybe need delay here check with files */
+			if (is_get == 1)
+			{
+				int32_t data = get_data_from_bus(bus);
+				inst->rd = data;
+				set_data_to_cache(cache, addr, data, 0);
+			}
+			else
+			{
+				set_data_to_cache(cache, addr, inst->rd, 1);
+				if (is_sc_cmd)
+				{
+					inst->rd = 1;
+				}
+			}
 		}
 		else {
 			if (is_bus_free(bus))
 			{
-				printf("requesting busrd\n");
-				make_BusRd_request(bus, core->core_id, addr);
+				unsigned short curr_cache_index = get_cache_index(addr);
+				if (cache->cache[curr_cache_index].state == M)
+				{
+					unsigned short curr_cache_tag = cache->cache[curr_cache_index].tag;
+					uint32_t addr_to_flush = get_main_memory_addr(curr_cache_index, curr_cache_tag);
+					int32_t data_to_flush = get_data_from_cache(cache, addr);
+					make_Flush_request(bus, core->core_id, addr_to_flush, data_to_flush);
+				}
+				else if (is_get == 1)
+				{
+					make_BusRd_request(bus, core->core_id, addr);
+				}
+				else
+				{
+					make_BusRdX_request(bus, core->core_id, addr);
+				}
 			}
 			/* stall command */
 			printf("stall for memory read\n");
@@ -199,7 +235,7 @@ void get_data_from_memory(Core* core, Instruction* inst, Cache* cache, uint32_t*
 }
 
 
-void memory(Core* core,Cache* cache, uint32_t* MM, Bus* bus, struct WatchFlag** watch){
+void memory(Core* core,Cache* cache, Bus* bus, struct WatchFlag** watch){
 	printf("---- enter memory---\n");
 	if (core->memory == Stall){
 		printf("not active\n");
@@ -212,23 +248,23 @@ void memory(Core* core,Cache* cache, uint32_t* MM, Bus* bus, struct WatchFlag** 
 		}
 	int alu_res = core->ex_mem.Q_alu_res;
 	if(inst->opcode == 17 /*sw*/){
-		printf("performing MM sw\n");
-		MM[alu_res] = inst->rd;
+		printf("performing sw\n");
+		get_set_data_from_memory(core, inst, cache, bus, alu_res, 0, 0);
 	}
 	/* put write back value in rd register*/
 	if(inst->opcode == 16 /*lw*/){
-		printf("performing load word\n");
-		get_data_from_memory(core, inst, cache, MM, bus, alu_res);	
+		printf("performing lw\n");
+		get_set_data_from_memory(core, inst, cache, bus, alu_res, 1, 0);
 	}
 	if(inst->opcode == 18 /*ll*/){
 		printf("performing load linked\n");
-		get_data_from_memory(core, inst, cache, MM, bus, alu_res);
+		get_set_data_from_memory(core, inst, cache, bus, alu_res, 1, 0);
 		watch[(core->core_id)]->address  = alu_res;
 		watch[(core->core_id)]->watching = 1;
 		watch[(core->core_id)]->visited  = 0;
 	}
 	if(inst->opcode == 19 /*sc*/){
-		printf("performing MM store conditional\n");
+		printf("performing store conditional\n");
 		struct WatchFlag* cur_watch = watch[(core->core_id)];
 		if(cur_watch->address == alu_res && cur_watch->watching==1 && cur_watch->visited == 1 ){
 			/*sc fail*/
@@ -238,8 +274,7 @@ void memory(Core* core,Cache* cache, uint32_t* MM, Bus* bus, struct WatchFlag** 
 		else{
 			/*sc successes*/
 			printf("sc successes writing to memroy\n");
-			MM[alu_res] = inst->rd;
-			inst->rd = 1;
+			get_set_data_from_memory(core, inst, cache, bus, alu_res, 0, 1);
 		}
 		for(int i=0;i<NUM_CORES;i++){
 			if(i == core->core_id) continue;

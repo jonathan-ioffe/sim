@@ -1,15 +1,15 @@
 #include "cores.h"
 #include "instruction.h"
 #include "bus.h"
-
+#include "cache.h"
 Core* cores[NUM_CORES];
 IM* inst_mems[NUM_CORES];
 Cache* caches[NUM_CORES];
 struct WatchFlag* watch[NUM_CORES];
-
+Bus bus;
 int cores_running = 4;
 int clk_cycles = 0;
-
+int main_memory_stalls_left = MAIN_MEMORY_FETCH_DELAY;
 
 void init_pipe(int core_num){
 	cores[core_num]->fetch = Active;
@@ -35,6 +35,7 @@ void init_cores(){
         caches[i] = (Cache*)calloc(1,sizeof(Cache));
         watch[i] = (struct WatchFlag*)calloc(1,sizeof(struct WatchFlag));
     }
+	bus.bus_cmd_Q = 0;
     printf("Init cores done\n");
     return;
 }
@@ -67,9 +68,13 @@ void next_cycle(){
 		cores[i]->memory = cores[i]->next_cycle_memory;
 		cores[i]->writeback = cores[i]->next_cycle_writeback;
 	}
+	bus.bus_addr_Q = bus.bus_addr_D;
+	bus.bus_cmd_Q = bus.bus_cmd_D;
+	bus.bus_data_Q = bus.bus_data_D;
+	bus.bus_origid_Q = bus.bus_origid_D;
 }
 
-void run_program(uint32_t* MM, Bus* bus){
+void run_program(uint32_t* MM){
 	printf("Start running program\n");
 	/* TODO need to check bus panding here - any core that has should put on bus if not need main memory to return after 64 cycles */
 	int first_iter = 1;
@@ -80,16 +85,48 @@ void run_program(uint32_t* MM, Bus* bus){
 		else{
 			next_cycle();
 		}
+		if (is_bus_pending_flush(&bus))
+		{
+			MM[bus.bus_addr_Q] = bus.bus_data_Q;
+			if (bus.bus_origid_Q < NUM_CORES)
+			{
+				caches[bus.bus_origid_Q]->cache->state = bus.bus_cmd_Q == 1 ? S : I;
+			}
+			free_bus_line(&bus);
+		}
 		for(int i =0;i < NUM_CORES;i++){
 			if (cores[i]->core_state == Halt){
 				continue;
+			}
+			if (is_bus_pending_data(&bus))
+			{
+				/* search for data in core */
+				uint32_t addr = bus.bus_addr_Q;
+				if (is_data_in_cache_dirty(caches[i], addr))
+				{
+					int32_t data = get_data_from_cache(caches[i], addr);
+					make_Flush_request(&bus, i, addr, data);
+				}
+				/* didn't find data in any core, fetch from main */
+				else if (i == NUM_CORES - 1)
+				{
+					if (main_memory_stalls_left > 0)
+					{
+						main_memory_stalls_left--;
+					}
+					else {
+						make_Flush_request(&bus, 4, addr, MM[addr]);
+						/* reset the main stall counter for the next miss */
+						main_memory_stalls_left = MAIN_MEMORY_FETCH_DELAY;
+					}
+				}
 			}
 			printf("$$$ core %d $$$\n",i);
 			//printf("pipe states: %d, %d, %d, %d, %d\n",cores[i]->fetch,cores[i]->decode,cores[i]->execute,cores[i]->memory,cores[i]->writeback);
 			fetch(cores[i],inst_mems[i]);
 			decode(cores[i]);
 			execute(cores[i]);
-			memory(cores[i],caches[i],MM, bus, watch);
+			memory(cores[i],caches[i], &bus, watch);
 			if(writeBack(cores[i])==Halt){
 				cores_running--;
 			}

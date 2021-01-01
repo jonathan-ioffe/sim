@@ -17,6 +17,8 @@ typedef unsigned __int32 uint32_t;
 #define IM_SIZE 1024
 #define CACHE_SIZE 256
 #define HEX_INST_LEN  10
+#define MAIN_MEMORY_FETCH_DELAY 64
+#define BUS_FETCH_DELAY 64
 #include "bus.h"
 typedef struct instruction{
 	int opcode;
@@ -109,7 +111,7 @@ typedef struct cache{
 void init_cores();
 void sanity(); /*for debug*/
 void load_inst_mems();
-void run_program(uint32_t* MM, Bus* bus);
+void run_program(uint32_t* MM);
 
 
 #endif /* CORES_H_ */
