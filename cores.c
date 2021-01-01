@@ -1,7 +1,6 @@
-#define _CRT_SECURE_NO_WARNINGS
 #include "cores.h"
 #include "instruction.h"
-
+#include "bus.h"
 
 Core* cores[NUM_CORES];
 IM* inst_mems[NUM_CORES];
@@ -70,8 +69,9 @@ void next_cycle(){
 	}
 }
 
-void run_program(uint32_t* MM){
+void run_program(uint32_t* MM, Bus* bus){
 	printf("Start running program\n");
+	/* TODO need to check bus panding here - any core that has should put on bus if not need main memory to return after 64 cycles */
 	int first_iter = 1;
 	while(cores_running > 0){
 		if(first_iter==1){
@@ -89,7 +89,7 @@ void run_program(uint32_t* MM){
 			fetch(cores[i],inst_mems[i]);
 			decode(cores[i]);
 			execute(cores[i]);
-			memory(cores[i],caches[i],MM,watch);
+			memory(cores[i],caches[i],MM, bus, watch);
 			if(writeBack(cores[i])==Halt){
 				cores_running--;
 			}

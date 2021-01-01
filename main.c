@@ -2,10 +2,11 @@
 #include <stdlib.h>
 #include "cores.h"
 #include "instruction.h"
+#include "bus.h"
 #define MAIN_MEMORY_SIZE 1048576 /*2^20*/
 
 uint32_t MainMemory[MAIN_MEMORY_SIZE];
-
+Bus bus;
 
 void init_main_memory(char* memfile){
 	for (int i=0;i< MAIN_MEMORY_SIZE;i++){
@@ -19,6 +20,9 @@ void init_main_memory(char* memfile){
 		line_num++;
 		}
 	fclose(fd);
+
+    /* make bus free */
+    bus.bus_cmd = 0;
 }
 
 int main(int argc, char* argv[]){
@@ -34,7 +38,7 @@ int main(int argc, char* argv[]){
 
     /*set main memory*/
     init_main_memory(argv[i++]);
-    run_program(MainMemory);
+    run_program(MainMemory, &bus);
 
     //sanity(); /*for debug*/
     /*for(int k=0;k<30;k++){

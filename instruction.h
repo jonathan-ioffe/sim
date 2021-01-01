@@ -13,11 +13,12 @@ typedef unsigned __int32 uint32_t;
 #include <stdio.h>
 #include <stdlib.h>
 #include "cores.h"
+#include "bus.h"
 
 void fetch(Core* core,IM* inst_mem);
 void decode(Core* core);
 void execute(Core* core);
-void memory(Core* core,uint32_t* MM,struct WatchFlag** watch);
+void memory(Core* core, Cache* cache, uint32_t* MM, Bus* bus, struct WatchFlag** watch);
 enum State writeBack(Core* core);
 
 #endif /* INSTRUCTION_H_ */

@@ -7,6 +7,7 @@
 
 #include "instruction.h"
 #include "cores.h"
+#include "cache.h"
 
 void fetch(Core* core,IM* inst_mem){
 	printf("----enter fetch----\n");
@@ -149,7 +150,56 @@ void execute(Core* core){
 	printf("---- exit execute----\n");
 }
 
-void memory(Core* core,Cache* cache, uint32_t* MM,struct WatchFlag** watch){
+
+void get_data_from_memory(Core* core, Instruction* inst, Cache* cache, uint32_t* MM, Bus* bus, uint32_t addr)
+{
+	if (is_data_in_cache(cache, addr))
+	{
+		printf("performing cache load\n");
+		inst->rd = get_data_from_cache(cache, addr);
+	}
+	else {
+		/* the data is ready on the bus */
+		if (is_data_ready_from_bus(bus, addr)) {
+			printf("performing bus load\n");
+			int32_t data = get_data_from_bus(bus);
+			inst->rd = data;
+			free_bus_line(bus);
+			set_data_to_cache(cache, addr, data, 0);
+		}
+		else {
+			if (is_bus_free(bus))
+			{
+				printf("requesting busrd\n");
+				make_BusRd_request(bus, core->core_id, addr);
+			}
+			/* stall command */
+			printf("stall for memory read\n");
+			core->pc = core->pc_prev;
+			core->if_id.D_inst = core->if_id.Q_inst;
+			Instruction* nop_inst = (Instruction*)calloc(1, sizeof(Instruction));
+			nop_inst->opcode = -1;
+			core->id_ex.D_inst = nop_inst;
+
+			core->if_id.Q_inst = core->if_id.D_inst;
+			core->id_ex.Q_inst = core->id_ex.D_inst;
+			core->ex_mem.Q_inst = core->ex_mem.D_inst;
+			core->ex_mem.Q_alu_res = core->ex_mem.D_alu_res;
+			core->mem_wb.Q_inst = core->mem_wb.D_inst;
+
+			core->fetch = core->next_cycle_fetch;
+			core->decode = core->next_cycle_decode;
+			core->execute = core->next_cycle_execute;
+			core->memory = core->next_cycle_memory;
+			core->writeback = core->next_cycle_writeback;
+		}
+
+
+	}
+}
+
+
+void memory(Core* core,Cache* cache, uint32_t* MM, Bus* bus, struct WatchFlag** watch){
 	printf("---- enter memory---\n");
 	if (core->memory == Stall){
 		printf("not active\n");
@@ -167,12 +217,12 @@ void memory(Core* core,Cache* cache, uint32_t* MM,struct WatchFlag** watch){
 	}
 	/* put write back value in rd register*/
 	if(inst->opcode == 16 /*lw*/){
-		printf("performing MM lw\n");
-		inst->rd = MM[alu_res];
+		printf("performing load word\n");
+		get_data_from_memory(core, inst, cache, MM, bus, alu_res);	
 	}
 	if(inst->opcode == 18 /*ll*/){
-		printf("performing MM load linked\n");
-		inst->rd = MM[alu_res];
+		printf("performing load linked\n");
+		get_data_from_memory(core, inst, cache, MM, bus, alu_res);
 		watch[(core->core_id)]->address  = alu_res;
 		watch[(core->core_id)]->watching = 1;
 		watch[(core->core_id)]->visited  = 0;
