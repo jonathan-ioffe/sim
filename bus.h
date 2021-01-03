@@ -1,8 +1,6 @@
 #ifndef BUS_H_
 #define BUS_H_
-
-typedef __int32 int32_t;
-typedef unsigned __int32 uint32_t;
+#include "main.h"
 
 typedef struct bus {
 	unsigned short bus_origid_D;
@@ -15,6 +13,9 @@ typedef struct bus {
 	int32_t bus_data_Q;
 }Bus;
 
+Bus bus;
+
+void bus_next_cycle();
 unsigned short is_bus_pending_flush(Bus* bus);
 unsigned short is_bus_pending_data(Bus* bus);
 unsigned short is_bus_free(Bus* bus);

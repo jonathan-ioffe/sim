@@ -7,11 +7,8 @@
 
 #ifndef CORES_H_
 #define CORES_H_
-typedef __int32 int32_t;
-typedef unsigned __int32 uint32_t;
+#include "main.h"
 
-#include <stdlib.h>
-#include <stdio.h>
 #define NUM_REGS 16
 #define NUM_CORES 4
 #define IM_SIZE 1024
@@ -86,6 +83,19 @@ typedef struct core{
     enum State next_cycle_execute;
     enum State next_cycle_memory;
     enum State next_cycle_writeback;
+    int fetch_pc;
+    int decode_pc;
+    int execute_pc;
+    int memory_pc;
+    int writeback_pc;
+    int promote_fetch_pc;
+    int promote_decode_pc;
+    int promote_execute_pc;
+    int promote_memory_pc;
+    int promote_writeback_pc;
+
+    int pending_bus_read; /* 0 - not pending, 1 - BusRd, 2 - BusRdX */
+    int pending_bus_read_addr;
 
 
 
@@ -108,9 +118,11 @@ typedef struct cache{
 
 
 
-void init_cores();
+void init_cores(char** core_trace_file_names);
+void init_bus(char* bus_trace_file_name);
 void sanity(); /*for debug*/
-void load_inst_mems();
+void load_inst_mems(char** inst_mems_file_names);
+void write_core_regs_files(char** regout_file_names);
 void run_program(uint32_t* MM);
 
 

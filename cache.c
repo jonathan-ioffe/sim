@@ -18,12 +18,12 @@ unsigned short is_data_in_cache(Cache* cache, uint32_t addr)
 	unsigned short index = get_cache_index(addr);
 	unsigned short tag = get_cache_tag(addr);
 
-	/* Check if the tag is matching */
-	if (cache->cache[index].tag != tag) {
-		return 0;
-	}
 	/* Check if the data is inavlid */
 	if (cache->cache[index].state == I) {
+		return 0;
+	}
+	/* Check if the tag is matching */
+	if (cache->cache[index].tag != tag) {
 		return 0;
 	}
 

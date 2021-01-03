@@ -1,8 +1,8 @@
 #ifndef CACHE_H_
 #define CACHE_H_
+#include "main.h"
 #include "cores.h"
-typedef __int32 int32_t;
-typedef unsigned __int32 uint32_t;
+
 
 unsigned short get_cache_index(uint32_t addr);
 uint32_t get_main_memory_addr(unsigned short index, unsigned short tag);

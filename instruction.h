@@ -7,8 +7,7 @@
 
 #ifndef INSTRUCTION_H_
 #define INSTRUCTION_H_
-typedef __int32 int32_t;
-typedef unsigned __int32 uint32_t;
+#include "main.h"
 
 #include <stdio.h>
 #include <stdlib.h>

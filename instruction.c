@@ -10,25 +10,25 @@
 #include "cache.h"
 
 void fetch(Core* core,IM* inst_mem){
-	printf("----enter fetch----\n");
+	if (VERBOSE_MODE) printf("----enter fetch----\n");
 
 	if (core->fetch == Stall) return;
 	uint32_t inst = inst_mem->mem[core->pc];
-	printf("pc %d got instruction %x\n",core->pc,inst);
+	if (VERBOSE_MODE) printf("pc %d got instruction %x\n",core->pc,inst);
 	core->if_id.D_inst = inst;
 	core->pc_prev = core->pc;
 	core->pc++;
 	core->next_cycle_decode = Active;
 
-	printf("----exit fetch----\n");
+	if (VERBOSE_MODE) printf("----exit fetch----\n");
 
 
 }
 
 void decode(Core* core){
-	printf("----enter decode----\n");
+	if (VERBOSE_MODE) printf("----enter decode----\n");
 	if (core->decode == Stall){
-		printf("not active\n");
+		if (VERBOSE_MODE) printf("not active\n");
 		return;
 	}
 	uint32_t inst = core->if_id.Q_inst;
@@ -46,16 +46,17 @@ void decode(Core* core){
 	res->rd = core->regs[(inst & 0x00f00000) >> 20];
 	res->rs = core->regs[rs_index];
 	res->rt = core->regs[rt_index];
-	printf("opcode=%d, rd=%d, rs=%d,rt=%d\n",res->opcode, ((inst & 0x00f00000) >> 20),((inst & 0x000f0000) >> 16),((inst & 0x0000f000) >> 12));
+	if (VERBOSE_MODE) printf("opcode=%d, rd=%d, rs=%d,rt=%d\n",res->opcode, ((inst & 0x00f00000) >> 20),((inst & 0x000f0000) >> 16),((inst & 0x0000f000) >> 12));
 	/*Data Hazards*/
 	/*check hazards*/
 	if((core->regs_to_write[rs_index] == 1) || (core->regs_to_write[rt_index] == 1) || (core->regs_to_write[res->rd_index] ==1 && res->opcode == 17)){ /*hazard detected*/
-		printf("hazard exists\n");
+		if (VERBOSE_MODE) printf("hazard exists\n");
 		core->pc= core->pc_prev;
 		core->if_id.D_inst = core->if_id.Q_inst;
 		Instruction* nop_inst = (Instruction*)calloc(1,sizeof(Instruction));
 		nop_inst->opcode = -1;
 		core->id_ex.D_inst = nop_inst;
+		core->promote_decode_pc = 0;
 		return;
 	}
 	else{
@@ -88,21 +89,24 @@ void decode(Core* core){
 	}
 	core->id_ex.D_inst = res;
 	core->next_cycle_execute = Active;
-	printf("----exit decode----\n");
+	core->promote_decode_pc = 1;
+	if (VERBOSE_MODE) printf("----exit decode----\n");
 
 }
+
 void execute(Core* core){
-	printf("---- enter exectue----\n");
+	if (VERBOSE_MODE) printf("---- enter exectue----\n");
 	if (core->execute == Stall){
-		printf("not active\n");
+		if (VERBOSE_MODE) printf("not active\n");
 		return;
 	}
 	Instruction* inst = core->id_ex.Q_inst;
 	if (inst->opcode == -1){/*nop*/
 		core->ex_mem.D_inst = inst;
+		core->promote_execute_pc = 0;
 		return;
 	}
-	printf("executing alu op: %d\n",inst->opcode);
+	if (VERBOSE_MODE) printf("executing alu op: %d\n",inst->opcode);
 	switch(inst->opcode){
 	case(0):/*add*/
 		core->ex_mem.D_alu_res = inst->rs + inst->rt;
@@ -144,41 +148,51 @@ void execute(Core* core){
 		core->ex_mem.D_alu_res = inst->rs + inst->rt;
 		break;
 	}
-	printf("res is: %d\n",core->ex_mem.D_alu_res);
+	if (VERBOSE_MODE) printf("res is: %d\n",core->ex_mem.D_alu_res);
 	core->ex_mem.D_inst = inst;
 	core->next_cycle_memory = Active;
-	printf("---- exit execute----\n");
+	core->promote_execute_pc = 1;
+	if (VERBOSE_MODE) printf("---- exit execute----\n");
 }
 
 
-void get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, Bus* bus, uint32_t addr, unsigned short is_get, unsigned short is_sc_cmd)
+unsigned short get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, Bus* bus, uint32_t addr, unsigned short is_get, unsigned short is_sc_cmd)
 {
+	/* for get enough data in cache. for set must be dirty in cache */
 	if (is_data_in_cache(cache, addr))
 	{
-		printf("performing cache load/set\n");
+		if (VERBOSE_MODE) printf("performing cache load/set\n");
 		if (is_get == 1)
 		{
 			inst->rd = get_data_from_cache(cache, addr);
+			return 1;
 		}
 		else
 		{
+			if (!is_data_in_cache_dirty(cache, addr)) 
+			{
+				make_BusRdX_request(bus, core->core_id, addr);
+			}
 			set_data_to_cache(cache, addr, inst->rd, 1);
 			if (is_sc_cmd)
 			{
 				inst->rd = 1;
 			}
+			return 1;
 		}
 	}
 	else {
 		/* the data is ready on the bus */
 		if (is_data_ready_from_bus(bus, core->core_id, addr)) {
-			printf("performing bus load/set\n");
+			if (VERBOSE_MODE) printf("performing bus load/set\n");
+			//free_bus_line(bus);
 			/* TODO maybe need delay here check with files */
 			if (is_get == 1)
 			{
 				int32_t data = get_data_from_bus(bus);
 				inst->rd = data;
 				set_data_to_cache(cache, addr, data, 0);
+				return 1;
 			}
 			else
 			{
@@ -187,6 +201,7 @@ void get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, Bus* 
 				{
 					inst->rd = 1;
 				}
+				return 1;
 			}
 		}
 		else {
@@ -210,134 +225,141 @@ void get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, Bus* 
 				}
 			}
 			/* stall command */
-			printf("stall for memory read\n");
+			//printf("stall for memory read\n");
 			core->pc = core->pc_prev;
-			core->if_id.D_inst = core->if_id.Q_inst;
 			Instruction* nop_inst = (Instruction*)calloc(1, sizeof(Instruction));
 			nop_inst->opcode = -1;
-			core->id_ex.D_inst = nop_inst;
-
-			core->if_id.Q_inst = core->if_id.D_inst;
-			core->id_ex.Q_inst = core->id_ex.D_inst;
-			core->ex_mem.Q_inst = core->ex_mem.D_inst;
-			core->ex_mem.Q_alu_res = core->ex_mem.D_alu_res;
-			core->mem_wb.Q_inst = core->mem_wb.D_inst;
-
+			core->if_id.D_inst = core->if_id.Q_inst;
+			core->id_ex.D_inst = core->id_ex.Q_inst;
+			core->ex_mem.D_inst = core->ex_mem.Q_inst;
+			core->ex_mem.D_alu_res = core->ex_mem.Q_alu_res;
+			core->mem_wb.D_inst = nop_inst;
 			core->fetch = core->next_cycle_fetch;
 			core->decode = core->next_cycle_decode;
 			core->execute = core->next_cycle_execute;
 			core->memory = core->next_cycle_memory;
 			core->writeback = core->next_cycle_writeback;
+			return 0;
 		}
-
-
 	}
 }
 
 
 void memory(Core* core,Cache* cache, Bus* bus, struct WatchFlag** watch){
-	printf("---- enter memory---\n");
+	if (VERBOSE_MODE) printf("---- enter memory---\n");
 	if (core->memory == Stall){
-		printf("not active\n");
+		if (VERBOSE_MODE) printf("not active\n");
 		return;
 	}
+	int is_stall = 0;
 	Instruction* inst = core->ex_mem.Q_inst;
 	if (inst->opcode == -1){/*nop*/
 			core->mem_wb.D_inst = inst;
+			core->promote_memory_pc = 0;
 			return;
 		}
 	int alu_res = core->ex_mem.Q_alu_res;
 	if(inst->opcode == 17 /*sw*/){
-		printf("performing sw\n");
-		get_set_data_from_memory(core, inst, cache, bus, alu_res, 0, 0);
+		if (VERBOSE_MODE) printf("performing sw\n");
+		is_stall = !get_set_data_from_memory(core, inst, cache, bus, alu_res, 0, 0);
 	}
 	/* put write back value in rd register*/
-	if(inst->opcode == 16 /*lw*/){
-		printf("performing lw\n");
-		get_set_data_from_memory(core, inst, cache, bus, alu_res, 1, 0);
+	else if(inst->opcode == 16 /*lw*/){
+		if (VERBOSE_MODE) printf("performing lw\n");
+		is_stall = !get_set_data_from_memory(core, inst, cache, bus, alu_res, 1, 0);
 	}
-	if(inst->opcode == 18 /*ll*/){
-		printf("performing load linked\n");
-		get_set_data_from_memory(core, inst, cache, bus, alu_res, 1, 0);
+	else if(inst->opcode == 18 /*ll*/){
+		if (VERBOSE_MODE) printf("performing load linked\n");
 		watch[(core->core_id)]->address  = alu_res;
 		watch[(core->core_id)]->watching = 1;
 		watch[(core->core_id)]->visited  = 0;
+		is_stall = !get_set_data_from_memory(core, inst, cache, bus, alu_res, 1, 0);
 	}
-	if(inst->opcode == 19 /*sc*/){
-		printf("performing store conditional\n");
+	else if(inst->opcode == 19 /*sc*/){
+		if (VERBOSE_MODE) printf("performing store conditional\n");
 		struct WatchFlag* cur_watch = watch[(core->core_id)];
 		if(cur_watch->address == alu_res && cur_watch->watching==1 && cur_watch->visited == 1 ){
 			/*sc fail*/
-			printf("sc Failed\n");
+			if (VERBOSE_MODE) printf("sc Failed\n");
 			inst->rd = 0;
 		}
 		else{
 			/*sc successes*/
-			printf("sc successes writing to memroy\n");
-			get_set_data_from_memory(core, inst, cache, bus, alu_res, 0, 1);
+			if (VERBOSE_MODE) printf("sc successes writing to memroy\n");
+			is_stall = !get_set_data_from_memory(core, inst, cache, bus, alu_res, 0, 1);
 		}
 		for(int i=0;i<NUM_CORES;i++){
 			if(i == core->core_id) continue;
 			if(watch[i]->address == alu_res && watch[i]->watching == 1){
 				watch[i]->visited = 1;
-				printf("sc on other core ll\n");
+				if (VERBOSE_MODE) printf("sc on other core ll\n");
 			}
 		}
 
 	}
 
 	/*arithmetic/logic op*/
-	if(inst->opcode <= 8){
-		printf("set rd for write back\n");
+	else if(inst->opcode <= 8){
+		if (VERBOSE_MODE) printf("set rd for write back\n");
 		inst->rd = alu_res;
 	}
-	core->mem_wb.D_inst = inst;
+	if (!is_stall)
+	{
+		core->promote_memory_pc = 1;
+		core->mem_wb.D_inst = inst;
+	}
+	else
+	{
+		core->promote_memory_pc = 0;
+	}
 	core->next_cycle_writeback = Active;
 
-	printf("----exit memory----\n");
+	if (VERBOSE_MODE) printf("----exit memory----\n");
 }
+
 enum State writeBack(Core* core){
-	printf("----enter writeback----\n");
+	if (VERBOSE_MODE) printf("----enter writeback----\n");
 
 	if (core->writeback == Stall){
-		printf("not active\n");
+		if (VERBOSE_MODE) printf("not active\n");
 		/*signal that core itself is still active*/
 		return Active;
 	}
 	Instruction* inst = core->mem_wb.Q_inst;
 	if (inst->opcode == -1){/*nop*/
 		free(inst);
+		core->promote_writeback_pc = 0;
 		return Active;
 	}
 	/*perform writeback*/
 	if (inst->opcode<=8/*arit/logi*/ || inst->opcode ==16 /*lw*/ || inst->opcode == 18/*ll*/){
-		printf("writing back value %x to reg number %d\n",inst->rd,inst->rd_index);
+		if (VERBOSE_MODE) printf("writing back value %x to reg number %d\n",inst->rd,inst->rd_index);
 		if(inst->rd_index!=0){
-				core->regs[inst->rd_index] = inst->rd;
+			core->regs[inst->rd_index] = inst->rd;
 		}
 		core->regs_to_write[inst->rd_index] = 0; /*clean*/
 	}
 	if(inst->opcode == 15 /*jal*/){
-		printf("writing back jal value %x to reg 15\n",inst->rd);
+		if (VERBOSE_MODE) printf("writing back jal value %x to reg 15\n",inst->rd);
 		core->regs[15] = core->pc-4;
 		core->regs_to_write[15] = 0;
 	}
 	if(inst->opcode == 19 /*sc*/){
-		printf("writing back value %x to reg number %d\n",inst->rd,inst->rd_index);
+		if (VERBOSE_MODE) printf("writing back value %x to reg number %d\n",inst->rd,inst->rd_index);
 		if(inst->rd_index!=0){
 			core->regs[inst->rd_index] = inst->rd;
 		}
 		core->regs_to_write[inst->rd_index] = 0; /*clean*/
 	}
 	if(inst->opcode==20/*halt*/){
-		printf("Core Halting\n");
+		if (VERBOSE_MODE) printf("Core Halting\n");
 		core->core_state = Halt;
 		return Halt;
 	}
 	free(inst);
+	core->promote_writeback_pc = 1;
+	if (VERBOSE_MODE) printf("----exit writeback----\n");
 	return Active;
-	printf("----exit writeback----\n");
-
 }
 
 

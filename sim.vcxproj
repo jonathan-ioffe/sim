@@ -30,6 +30,7 @@
     <ClInclude Include="cores.h" />
     <ClInclude Include="cache.h" />
     <ClInclude Include="instruction.h" />
+    <ClInclude Include="main.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
