@@ -39,11 +39,11 @@ void write_core_trace_line(char** core_trace_file_names)
 
 		int curr_pcs[5];
 
-		curr_pcs[0] = cores[i]->fetch == Active ? cores[i]->fetch_pc : -1;
-		curr_pcs[1] = cores[i]->decode == Active ? cores[i]->decode_pc : -1;
-		curr_pcs[2] = cores[i]->execute == Active ? cores[i]->execute_pc : -1;
-		curr_pcs[3] = cores[i]->memory == Active ? cores[i]->memory_pc : -1;
-		curr_pcs[4] = cores[i]->writeback == Active ? cores[i]->writeback_pc : -1;
+		curr_pcs[0] = cores[i]->fetch;
+		curr_pcs[1] = cores[i]->decode;
+		curr_pcs[2] = cores[i]->execute;
+		curr_pcs[3] = cores[i]->memory;
+		curr_pcs[4] = cores[i]->writeback;
 
 		int write_line = 0;
 		for (int j = 0; j < 5; j++)
@@ -99,13 +99,20 @@ void init_cores(char** core_trace_file_names){
         cores[i] = (Core*)calloc(1,sizeof(Core));
         cores[i]-> core_state = Active; /*activate cores*/
         cores[i]->core_id = i ;
-        init_pipe(i);
+        //init_pipe(i);
+		cores[i]->halt_pc = -1;
+		cores[i]->fetch = 0;
+		cores[i]->decode = -1;
+		cores[i]->execute = -1;
+		cores[i]->memory = -1;
+		cores[i]->writeback = -1;
         inst_mems[i] = (IM*)calloc(1,sizeof(IM));
         caches[i] = (Cache*)calloc(1,sizeof(Cache));
         watch[i] = (struct WatchFlag*)calloc(1,sizeof(struct WatchFlag));
 		FILE* curr_core_trace_fd;
 		curr_core_trace_fd = fopen(core_trace_file_names[i], "w");
 		fclose(curr_core_trace_fd);
+
     }
 	core_trace_fns = core_trace_file_names;
 	if (VERBOSE_MODE) printf("Init cores done\n");
@@ -124,6 +131,7 @@ void load_inst_mems(char** inst_mems_file_names){
 		fclose(fd);
 	}
 }
+
 void cores_next_cycle(){
 	for(int i=0;i<NUM_CORES;i++){
 		cores[i]->if_id.Q_inst = cores[i]->if_id.D_inst;
@@ -137,34 +145,13 @@ void cores_next_cycle(){
 		cores[i]->execute = cores[i]->next_cycle_execute;
 		cores[i]->memory = cores[i]->next_cycle_memory;
 		cores[i]->writeback = cores[i]->next_cycle_writeback;
-
-		cores[i]->writeback_pc = (cores[i]->promote_writeback_pc) ? cores[i]->memory_pc : -1;
-		cores[i]->memory_pc = (cores[i]->promote_memory_pc) ? cores[i]->execute_pc : -1; 
-		cores[i]->execute_pc = (cores[i]->promote_execute_pc) ? cores[i]->decode_pc : -1;
-		cores[i]->decode_pc = (cores[i]->promote_decode_pc) ? cores[i]->fetch_pc : -1;
-		cores[i]->fetch_pc = cores[i]->pc;
 	}	
-	write_core_trace_line(core_trace_fns);
 }
 
 void run_program(uint32_t* MM) {
 	if (VERBOSE_MODE) printf("Start running program\n");
-	int first_iter = 1;
 	while(cores_running > 0){
-		if(first_iter==1){
-			first_iter = 0;
-		}
-		else
-		{
-			clk_cycles++;
-			if (VERBOSE_MODE) printf("increment cycle %d\n", clk_cycles);
-			if (clk_cycles == 1179)
-			{
-				printf("\n");
-			}
-			bus_next_cycle();
-			cores_next_cycle();
-		}
+		write_core_trace_line(core_trace_fns);
 		if (is_bus_pending_flush(&bus))
 		{
 			MM[bus.bus_addr_Q] = bus.bus_data_Q;
@@ -231,19 +218,23 @@ void run_program(uint32_t* MM) {
 		}
 		
 		for(int i =0;i < NUM_CORES;i++){
-			if (cores[i]->core_state == Halt){
+			if (cores[i]->pc == cores[i]->halt_pc){
 				continue;
 			}
 			if (VERBOSE_MODE) printf("$$$ core %d $$$\n",i);
 			//printf("pipe states: %d, %d, %d, %d, %d\n",cores[i]->fetch,cores[i]->decode,cores[i]->execute,cores[i]->memory,cores[i]->writeback);
 			fetch(cores[i],inst_mems[i]);
-			decode(cores[i]);
+			decode(cores[i], inst_mems[i]);
 			execute(cores[i]);
 			memory(cores[i],caches[i], &bus, watch);
-			if(writeBack(cores[i])==Halt){
+			if(writeBack(cores[i])){
 				cores_running--;
 			}
 		}
+		clk_cycles++;
+		if (VERBOSE_MODE) printf("increment cycle %d\n", clk_cycles);
+		bus_next_cycle();
+		cores_next_cycle();
 		
 	}
 }

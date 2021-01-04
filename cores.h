@@ -63,7 +63,7 @@ typedef struct IM{
 
 typedef struct core{
     int pc;
-    int pc_prev;
+    int next_cycle_pc;
     int core_id;
     uint32_t regs[NUM_REGS];
     /*pipeline structs*/
@@ -73,29 +73,20 @@ typedef struct core{
     struct MEM_WB_Reg mem_wb;
     int regs_to_write[NUM_REGS];
     enum State core_state;
-    enum State fetch;
-    enum State decode;
-    enum State execute;
-    enum State memory;
-    enum State writeback;
-    enum State next_cycle_fetch;
-    enum State next_cycle_decode;
-    enum State next_cycle_execute;
-    enum State next_cycle_memory;
-    enum State next_cycle_writeback;
-    int fetch_pc;
-    int decode_pc;
-    int execute_pc;
-    int memory_pc;
-    int writeback_pc;
-    int promote_fetch_pc;
-    int promote_decode_pc;
-    int promote_execute_pc;
-    int promote_memory_pc;
-    int promote_writeback_pc;
+    int fetch;
+    int decode;
+    int execute;
+    int memory;
+    int writeback;
+    int next_cycle_fetch;
+    int next_cycle_decode;
+    int next_cycle_execute;
+    int next_cycle_memory;
+    int next_cycle_writeback;
 
-    int pending_bus_read; /* 0 - not pending, 1 - BusRd, 2 - BusRdX */
-    int pending_bus_read_addr;
+    int is_data_stalled;
+    int is_stalled;
+    int halt_pc;
 
 
 

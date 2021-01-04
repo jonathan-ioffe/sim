@@ -15,9 +15,9 @@
 #include "bus.h"
 
 void fetch(Core* core,IM* inst_mem);
-void decode(Core* core);
+void decode(Core* core, IM* inst_mem);
 void execute(Core* core);
 void memory(Core* core, Cache* cache, Bus* bus, struct WatchFlag** watch);
-enum State writeBack(Core* core);
+int writeBack(Core* core);
 
 #endif /* INSTRUCTION_H_ */
