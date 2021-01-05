@@ -65,6 +65,10 @@ void decode(Core* core){
 
 	/*set for next cycles*/
 	if(res->opcode <= 8 /*arit/log*/ || res->opcode==16 /*lw*/ || res->opcode==18/*ll*/ || res->opcode==19/*sc*/){
+		if (res->rd_index == 5 && core->core_id == 2)
+		{
+			printf("");
+		}
 		core->regs_to_write[res->rd_index] = 1;
 	}
 	if(res->opcode == 15/*jal*/){
@@ -155,39 +159,41 @@ void execute(Core* core){
 	if (VERBOSE_MODE) printf("---- exit execute----\n");
 }
 
-
-unsigned short get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, Bus* bus, uint32_t addr, unsigned short is_get, unsigned short is_sc_cmd)
+bool get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, Bus* bus, uint32_t addr, bool is_get, bool is_sc_cmd)
 {
 	/* for get enough data in cache. for set must be dirty in cache */
 	if (is_data_in_cache(cache, addr))
 	{
 		if (VERBOSE_MODE) printf("performing cache load/set\n");
-		if (is_get == 1)
+		if (is_get)
 		{
 			inst->rd = get_data_from_cache(cache, addr);
-			return 1;
+			return true;
 		}
 		else
 		{
 			if (!is_data_in_cache_dirty(cache, addr)) 
 			{
-				make_BusRdX_request(bus, core->core_id, addr);
+				if (!core->is_data_stall) make_BusRdX_request(bus, core->core_id, addr);
+				invalidate_cache_addr(cache, addr);
+				return false;
 			}
 			set_data_to_cache(cache, addr, inst->rd, 1);
 			if (is_sc_cmd)
 			{
 				inst->rd = 1;
 			}
-			return 1;
+			return true;
 		}
 	}
 	else {
 		/* the data is ready on the bus */
 		if (is_data_ready_from_bus(bus, core->core_id, addr)) {
 			if (VERBOSE_MODE) printf("performing bus load/set\n");
+			core->is_data_stall = false;
 			//free_bus_line(bus);
 			/* TODO maybe need delay here check with files */
-			if (is_get == 1)
+			if (is_get)
 			{
 				int32_t data = get_data_from_bus(bus);
 				inst->rd = data;
@@ -201,7 +207,7 @@ unsigned short get_set_data_from_memory(Core* core, Instruction* inst, Cache* ca
 				{
 					inst->rd = 1;
 				}
-				return 1;
+				return true;
 			}
 		}
 		else {
@@ -215,43 +221,31 @@ unsigned short get_set_data_from_memory(Core* core, Instruction* inst, Cache* ca
 					int32_t data_to_flush = get_data_from_cache(cache, addr);
 					make_Flush_request(bus, core->core_id, addr_to_flush, data_to_flush);
 				}
-				else if (is_get == 1)
+				else if (is_get)
 				{
-					make_BusRd_request(bus, core->core_id, addr);
+					if (!core->is_data_stall) make_BusRd_request(bus, core->core_id, addr);
 				}
 				else
 				{
-					make_BusRdX_request(bus, core->core_id, addr);
+					if (!core->is_data_stall) make_BusRdX_request(bus, core->core_id, addr);
 				}
 			}
-			/* stall command */
-			//printf("stall for memory read\n");
-			core->pc = core->pc_prev;
-			Instruction* nop_inst = (Instruction*)calloc(1, sizeof(Instruction));
-			nop_inst->opcode = -1;
-			core->if_id.D_inst = core->if_id.Q_inst;
-			core->id_ex.D_inst = core->id_ex.Q_inst;
-			core->ex_mem.D_inst = core->ex_mem.Q_inst;
-			core->ex_mem.D_alu_res = core->ex_mem.Q_alu_res;
-			core->mem_wb.D_inst = nop_inst;
-			core->fetch = core->next_cycle_fetch;
-			core->decode = core->next_cycle_decode;
-			core->execute = core->next_cycle_execute;
-			core->memory = core->next_cycle_memory;
-			core->writeback = core->next_cycle_writeback;
-			return 0;
+			return false;
 		}
 	}
 }
 
-
 void memory(Core* core,Cache* cache, Bus* bus, struct WatchFlag** watch){
+	if (clk_cycles == 143 && core->core_id == 2)
+	{
+		printf("");
+	}
 	if (VERBOSE_MODE) printf("---- enter memory---\n");
 	if (core->memory == Stall){
 		if (VERBOSE_MODE) printf("not active\n");
 		return;
 	}
-	int is_stall = 0;
+	bool is_stall = false;
 	Instruction* inst = core->ex_mem.Q_inst;
 	if (inst->opcode == -1){/*nop*/
 			core->mem_wb.D_inst = inst;
@@ -261,24 +255,25 @@ void memory(Core* core,Cache* cache, Bus* bus, struct WatchFlag** watch){
 	int alu_res = core->ex_mem.Q_alu_res;
 	if(inst->opcode == 17 /*sw*/){
 		if (VERBOSE_MODE) printf("performing sw\n");
-		is_stall = !get_set_data_from_memory(core, inst, cache, bus, alu_res, 0, 0);
+		is_stall = !get_set_data_from_memory(core, inst, cache, bus, alu_res, false, false);
 	}
 	/* put write back value in rd register*/
 	else if(inst->opcode == 16 /*lw*/){
 		if (VERBOSE_MODE) printf("performing lw\n");
-		is_stall = !get_set_data_from_memory(core, inst, cache, bus, alu_res, 1, 0);
+		is_stall = !get_set_data_from_memory(core, inst, cache, bus, alu_res, true, false);
 	}
 	else if(inst->opcode == 18 /*ll*/){
 		if (VERBOSE_MODE) printf("performing load linked\n");
 		watch[(core->core_id)]->address  = alu_res;
 		watch[(core->core_id)]->watching = 1;
 		watch[(core->core_id)]->visited  = 0;
-		is_stall = !get_set_data_from_memory(core, inst, cache, bus, alu_res, 1, 0);
+		is_stall = !get_set_data_from_memory(core, inst, cache, bus, alu_res, true, false);
 	}
 	else if(inst->opcode == 19 /*sc*/){
 		if (VERBOSE_MODE) printf("performing store conditional\n");
 		struct WatchFlag* cur_watch = watch[(core->core_id)];
-		if(cur_watch->address == alu_res && cur_watch->watching==1 && cur_watch->visited == 1 ){
+		if(cur_watch->address == alu_res && cur_watch->watching && cur_watch->visited)
+		{
 			/*sc fail*/
 			if (VERBOSE_MODE) printf("sc Failed\n");
 			inst->rd = 0;
@@ -286,18 +281,18 @@ void memory(Core* core,Cache* cache, Bus* bus, struct WatchFlag** watch){
 		else{
 			/*sc successes*/
 			if (VERBOSE_MODE) printf("sc successes writing to memroy\n");
-			is_stall = !get_set_data_from_memory(core, inst, cache, bus, alu_res, 0, 1);
+			is_stall = !get_set_data_from_memory(core, inst, cache, bus, alu_res, false, true);
 		}
 		for(int i=0;i<NUM_CORES;i++){
 			if(i == core->core_id) continue;
-			if(watch[i]->address == alu_res && watch[i]->watching == 1){
-				watch[i]->visited = 1;
+			if(watch[i]->address == alu_res && watch[i]->watching)
+			{
+				watch[i]->visited = true;
 				if (VERBOSE_MODE) printf("sc on other core ll\n");
 			}
 		}
 
 	}
-
 	/*arithmetic/logic op*/
 	else if(inst->opcode <= 8){
 		if (VERBOSE_MODE) printf("set rd for write back\n");
@@ -307,10 +302,35 @@ void memory(Core* core,Cache* cache, Bus* bus, struct WatchFlag** watch){
 	{
 		core->promote_memory_pc = 1;
 		core->mem_wb.D_inst = inst;
+		if (clk_cycles == 143)
+		{
+			printf("");
+		}
 	}
 	else
 	{
+		if (clk_cycles == 143)
+		{
+			printf("");
+		}
+		core->is_data_stall = true;
 		core->promote_memory_pc = 0;
+		/* stall command */
+			//printf("stall for memory read\n");
+		core->pc = core->pc_prev;
+		/*Instruction* nop_inst = (Instruction*)calloc(1, sizeof(Instruction));
+		nop_inst->opcode = -1;*/
+		core->if_id.D_inst = core->if_id.Q_inst;
+		core->id_ex.D_inst = core->id_ex.Q_inst;
+		core->ex_mem.D_inst = core->ex_mem.Q_inst;
+		core->ex_mem.D_alu_res = core->ex_mem.Q_alu_res;
+		core->mem_wb.D_inst = (Instruction*)calloc(1, sizeof(Instruction));
+		core->mem_wb.D_inst->opcode = -1;
+		core->next_cycle_fetch = core->fetch;
+		core->next_cycle_decode = core->decode;
+		core->next_cycle_execute = core->execute;
+		core->next_cycle_memory = core->memory;
+		core->next_cycle_writeback = core->writeback;
 	}
 	core->next_cycle_writeback = Active;
 
@@ -325,7 +345,12 @@ enum State writeBack(Core* core){
 		/*signal that core itself is still active*/
 		return Active;
 	}
+
 	Instruction* inst = core->mem_wb.Q_inst;
+	if (core->core_id == 2)
+	{
+		printf("");
+	}
 	if (inst->opcode == -1){/*nop*/
 		free(inst);
 		core->promote_writeback_pc = 0;
@@ -337,6 +362,10 @@ enum State writeBack(Core* core){
 		if(inst->rd_index!=0){
 			core->regs[inst->rd_index] = inst->rd;
 		}
+		if (inst->rd_index == 5 && core->core_id == 2)
+		{
+			printf("");
+		}
 		core->regs_to_write[inst->rd_index] = 0; /*clean*/
 	}
 	if(inst->opcode == 15 /*jal*/){
@@ -344,10 +373,14 @@ enum State writeBack(Core* core){
 		core->regs[15] = core->pc-4;
 		core->regs_to_write[15] = 0;
 	}
-	if(inst->opcode == 19 /*sc*/){
+	if(inst->opcode == 17 /*sw*/ || inst->opcode == 19 /*sc*/){
 		if (VERBOSE_MODE) printf("writing back value %x to reg number %d\n",inst->rd,inst->rd_index);
 		if(inst->rd_index!=0){
 			core->regs[inst->rd_index] = inst->rd;
+		}
+		if (inst->rd_index == 5 && core->core_id == 2)
+		{
+			printf("");
 		}
 		core->regs_to_write[inst->rd_index] = 0; /*clean*/
 	}

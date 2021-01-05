@@ -124,6 +124,7 @@ void load_inst_mems(char** inst_mems_file_names){
 		fclose(fd);
 	}
 }
+
 void cores_next_cycle(){
 	for(int i=0;i<NUM_CORES;i++){
 		cores[i]->if_id.Q_inst = cores[i]->if_id.D_inst;
@@ -151,19 +152,9 @@ void run_program(uint32_t* MM) {
 	if (VERBOSE_MODE) printf("Start running program\n");
 	int first_iter = 1;
 	while(cores_running > 0){
-		if(first_iter==1){
-			first_iter = 0;
-		}
-		else
+		if (clk_cycles == 143)
 		{
-			clk_cycles++;
-			if (VERBOSE_MODE) printf("increment cycle %d\n", clk_cycles);
-			if (clk_cycles == 1179)
-			{
-				printf("\n");
-			}
-			bus_next_cycle();
-			cores_next_cycle();
+			printf("");
 		}
 		if (is_bus_pending_flush(&bus))
 		{
@@ -245,5 +236,9 @@ void run_program(uint32_t* MM) {
 			}
 		}
 		
+		clk_cycles++;
+		if (VERBOSE_MODE) printf("increment cycle %d\n", clk_cycles);
+		bus_next_cycle();
+		cores_next_cycle();
 	}
 }

@@ -16,10 +16,10 @@ typedef struct bus {
 Bus bus;
 
 void bus_next_cycle();
-unsigned short is_bus_pending_flush(Bus* bus);
-unsigned short is_bus_pending_data(Bus* bus);
-unsigned short is_bus_free(Bus* bus);
-unsigned short is_data_ready_from_bus(Bus* bus, int core_idx, uint32_t addr);
+bool is_bus_pending_flush(Bus* bus);
+bool is_bus_pending_data(Bus* bus);
+bool is_bus_free(Bus* bus);
+bool is_data_ready_from_bus(Bus* bus, int core_idx, uint32_t addr);
 int32_t get_data_from_bus(Bus* bus);
 void make_BusRd_request(Bus* bus, int core_idx, uint32_t addr);
 void make_BusRdX_request(Bus* bus, int core_idx, uint32_t addr);

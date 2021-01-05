@@ -13,34 +13,26 @@ uint32_t get_main_memory_addr(unsigned short index, unsigned short tag)
 	return (tag << 8) + index;
 }
 
-unsigned short is_data_in_cache(Cache* cache, uint32_t addr)
+bool is_data_in_cache(Cache* cache, uint32_t addr)
 {
 	unsigned short index = get_cache_index(addr);
 	unsigned short tag = get_cache_tag(addr);
 
 	/* Check if the data is inavlid */
 	if (cache->cache[index].state == I) {
-		return 0;
+		return false;
 	}
 	/* Check if the tag is matching */
 	if (cache->cache[index].tag != tag) {
-		return 0;
+		return false;
 	}
 
-	return 1;
+	return true;
 }
 
-unsigned short is_data_in_cache_dirty(Cache* cache, uint32_t addr)
+bool is_data_in_cache_dirty(Cache* cache, uint32_t addr)
 {
-	unsigned short index = get_cache_index(addr);
-	if (!is_data_in_cache(cache, addr)) {
-		return 0;
-	}
-	/* let other cores read only if it's in M state */
-	if (cache->cache[index].state == M) {
-		return 1;
-	}
-	return 0;
+	return is_data_in_cache(cache, addr) && cache->cache[get_cache_index(addr)].state == M;
 }
 
 int32_t get_data_from_cache(Cache* cache, uint32_t addr)
@@ -54,4 +46,10 @@ void set_data_to_cache(Cache* cache, uint32_t addr, int32_t data, unsigned short
 	cache->cache[index].tag = get_cache_tag(addr);
 	cache->cache[index].state = is_dirty ? M : S;
 	cache->cache[index].data = data;
+}
+
+void invalidate_cache_addr(Cache* cache, uint32_t addr)
+{
+	unsigned short index = get_cache_index(addr);
+	cache->cache[index].state = I;
 }

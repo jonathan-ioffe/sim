@@ -33,21 +33,21 @@ void bus_next_cycle()
 	if (write_trace_line) write_bus_trace_line();
 }
 
-unsigned short is_bus_free(Bus* bus) {
+bool is_bus_free(Bus* bus) {
 	return bus->bus_cmd_Q == 0;
 }
 
-unsigned short is_data_ready_from_bus(Bus* bus, int core_idx, uint32_t addr)
+bool is_data_ready_from_bus(Bus* bus, int core_idx, uint32_t addr)
 {
 	return bus->bus_addr_Q == addr && bus->bus_cmd_Q == 3;
 }
 
-unsigned short is_bus_pending_flush(Bus* bus)
+bool is_bus_pending_flush(Bus* bus)
 {
 	return bus->bus_cmd_Q == 3;
 }
 
-unsigned short is_bus_pending_data(Bus* bus)
+bool is_bus_pending_data(Bus* bus)
 {
 	return bus->bus_cmd_Q != 0 && bus->bus_cmd_Q != 3;
 }

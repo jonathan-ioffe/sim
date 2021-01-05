@@ -28,8 +28,8 @@ typedef struct instruction{
 
 struct WatchFlag{
 	uint32_t address;
-	int visited;
-	int watching;
+	bool visited;
+	bool watching;
 };
 
 enum State {Active, Stall, Halt};
@@ -72,6 +72,7 @@ typedef struct core{
     struct EX_MEM_Reg ex_mem;
     struct MEM_WB_Reg mem_wb;
     int regs_to_write[NUM_REGS];
+    int regs_to_write_pc_invoked[NUM_REGS];
     enum State core_state;
     enum State fetch;
     enum State decode;
@@ -97,7 +98,7 @@ typedef struct core{
     int pending_bus_read; /* 0 - not pending, 1 - BusRd, 2 - BusRdX */
     int pending_bus_read_addr;
 
-
+    bool is_data_stall;
 
 }Core;
 
