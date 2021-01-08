@@ -61,6 +61,16 @@ typedef struct IM{
     uint32_t mem[IM_SIZE];
 }IM;
 
+typedef struct StatsCounts {
+    int32_t cycles;
+    int32_t instructions;
+    int32_t read_hit;
+    int32_t write_hit;
+    int32_t read_miss;
+    int32_t write_miss;
+    int32_t decode_stall;
+    int32_t mem_stall;
+}StatsCounts;
 
 typedef struct core{
     int pc;
@@ -72,11 +82,9 @@ typedef struct core{
     struct ID_EX_Reg id_ex;
     struct EX_MEM_Reg ex_mem;
     struct MEM_WB_Reg mem_wb;
-    bool regs_to_write_D[NUM_REGS];
-    bool regs_to_write_Q[NUM_REGS];
+    bool regs_to_write_D[NUM_REGS], regs_to_write_Q[NUM_REGS];
     int regs_to_write_pc_invoked[NUM_REGS];
-    enum State core_state_Q;
-    enum State core_state_D;
+    enum State core_state_Q, core_state_D;
     enum State fetch;
     enum State decode;
     enum State execute;
@@ -103,6 +111,8 @@ typedef struct core{
 
     bool is_data_stall;
     bool is_data_hazard;
+
+    StatsCounts core_stats_counts;
 }Core;
 
 enum MSI{I/*Invalid*/, S/*Shared*/, M/*Modified*/};
@@ -124,11 +134,11 @@ typedef struct cache{
 
 void init_cores(char** core_trace_file_names);
 void init_bus(char* bus_trace_file_name);
-void sanity(); /*for debug*/
 void load_inst_mems(char** inst_mems_file_names);
 void write_core_regs_files(char** regout_file_names);
 void write_core_dsram_files(char** dsram_file_names);
 void write_core_tsram_files(char** tsram_file_names);
+void write_core_stats_files(char** stats_file_names);
 void run_program(uint32_t* MM);
 
 

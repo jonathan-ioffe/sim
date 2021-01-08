@@ -19,6 +19,8 @@ void fetch(Core* core,IM* inst_mem){
 	uint32_t inst = inst_mem->mem[core->pc];
 	if (VERBOSE_MODE) printf("pc %d got instruction %x\n",core->pc,inst);
 	core->if_id.D_inst = inst;
+	// count instruction only if fetched a new instruction. if already halted stop counting
+	if (core->pc_prev != core->pc && core->halt_pc == -1) core->core_stats_counts.instructions++; 
 	core->pc_prev = core->pc;
 	core->pc++;
 	core->next_cycle_decode = Active;
@@ -57,6 +59,7 @@ void decode(Core* core){
 	/*check hazards*/
 	if((core->regs_to_write_Q[rs_index]) || (core->regs_to_write_Q[rt_index]) || (core->regs_to_write_Q[res->rd_index] && res->opcode == 17)){ /*hazard detected*/
 		if (VERBOSE_MODE) printf("hazard exists\n");
+		if (!core->is_data_stall) core->core_stats_counts.decode_stall++; // count decode stall only if it's not stalling because of memory hazard before
 		core->pc= core->pc_prev;
 		core->if_id.D_inst = core->if_id.Q_inst;
 		Instruction* nop_inst = (Instruction*)calloc(1,sizeof(Instruction));
@@ -183,6 +186,7 @@ bool get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, Bus* 
 		if (is_get)
 		{
 			inst->rd = get_data_from_cache(cache, addr);
+			core->core_stats_counts.read_hit++;
 			return true;
 		}
 		else
@@ -196,7 +200,7 @@ bool get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, Bus* 
 					invalidate_cache_addr(cache, addr);
 				}
 				//if (!core->is_data_stall && is_bus_free(bus)) make_BusRdX_request(bus, core->core_id, addr);
-				
+				core->core_stats_counts.write_miss++;
 				return false;
 			}
 			set_data_to_cache(cache, addr, inst->rd, 1);
@@ -204,6 +208,7 @@ bool get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, Bus* 
 			{
 				inst->rd = 1;
 			}
+			core->core_stats_counts.write_hit++;
 			return true;
 		}
 	}
@@ -253,12 +258,14 @@ bool get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, Bus* 
 					//if (!core->is_data_stall) make_BusRd_request(bus, core->core_id, addr);
 					core->pending_bus_read = MadeRd;
 					core->pending_bus_read_addr = addr;
+					core->core_stats_counts.read_miss++;
 				}
 				else
 				{
 					//if (!core->is_data_stall) make_BusRdX_request(bus, core->core_id, addr);
 					core->pending_bus_read = MadeRdX;
 					core->pending_bus_read_addr = addr;
+					core->core_stats_counts.write_miss++;
 				}
 			}
 			/*if (is_bus_free(bus))
@@ -286,10 +293,6 @@ bool get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, Bus* 
 }
 
 void memory(Core* core,Cache* cache, Bus* bus, struct WatchFlag** watch){
-	if (clk_cycles == 144 && core->core_id == 2)
-	{
-		printf("");
-	}
 	if (VERBOSE_MODE) printf("---- enter memory---\n");
 	if (core->memory == Stall){
 		if (VERBOSE_MODE) printf("not active\n");
@@ -297,10 +300,11 @@ void memory(Core* core,Cache* cache, Bus* bus, struct WatchFlag** watch){
 	}
 	bool is_stall = false;
 	Instruction* inst = core->ex_mem.Q_inst;
-	if (inst->opcode == -1){/*nop*/
+	if (inst->opcode == -1)
+	{/*nop*/
 			core->mem_wb.D_inst = inst;
 			return;
-		}
+	}
 	int alu_res = core->ex_mem.Q_alu_res;
 	if(inst->opcode == 17 /*sw*/){
 		if (VERBOSE_MODE) printf("performing sw\n");
@@ -341,6 +345,7 @@ void memory(Core* core,Cache* cache, Bus* bus, struct WatchFlag** watch){
 			}
 		}
 
+
 	}
 	/*arithmetic/logic op*/
 	else if(inst->opcode <= 8){
@@ -355,6 +360,7 @@ void memory(Core* core,Cache* cache, Bus* bus, struct WatchFlag** watch){
 	else
 	{
 		core->is_data_stall = true;
+		core->core_stats_counts.mem_stall++;
 		/* stall command */
 			//printf("stall for memory read\n");
 		core->pc = core->pc_prev;
@@ -395,10 +401,6 @@ enum State writeBack(Core* core){
 	}
 
 	Instruction* inst = core->mem_wb.Q_inst;
-	if (core->core_id == 2 && clk_cycles == 70)
-	{
-		printf("");
-	}
 	if (inst->opcode == -1){/*nop*/
 		free(inst);
 		return Active;

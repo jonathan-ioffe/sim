@@ -106,12 +106,32 @@ void write_core_tsram_files(char** tsram_file_names)
 
 		for (int j = 0; j < CACHE_SIZE; j++)
 		{
-			fprintf(curr_tsram_fd, "%04X\n", (caches[i]->cache[j].state << 12) + caches[i]->cache[j].tag);
+			fprintf(curr_tsram_fd, "%08X\n", (caches[i]->cache[j].state << 12) + caches[i]->cache[j].tag);
 		}
 		fclose(curr_tsram_fd);
 	}
 }
 
+void write_core_stats_files(char** stats_file_names)
+{
+	for (int i = 0; i < NUM_CORES; i++)
+	{
+		FILE* curr_stats_fd;
+
+		curr_stats_fd = fopen(stats_file_names[i], "w");
+
+		fprintf(curr_stats_fd, "cycles %d\n", cores[i]->core_stats_counts.cycles);
+		fprintf(curr_stats_fd, "instructions %d\n", cores[i]->core_stats_counts.instructions);
+		fprintf(curr_stats_fd, "read_hit %d\n", cores[i]->core_stats_counts.read_hit);
+		fprintf(curr_stats_fd, "write_hit %d\n", cores[i]->core_stats_counts.write_hit);
+		fprintf(curr_stats_fd, "read_miss %d\n", cores[i]->core_stats_counts.read_miss);
+		fprintf(curr_stats_fd, "write_miss %d\n", cores[i]->core_stats_counts.write_miss);
+		fprintf(curr_stats_fd, "decode_stall %d\n", cores[i]->core_stats_counts.decode_stall);
+		fprintf(curr_stats_fd, "mem_stall %d\n", cores[i]->core_stats_counts.mem_stall);
+
+		fclose(curr_stats_fd);
+	}
+}
 
 void init_pipe(int core_num){
 	cores[core_num]->fetch = Active;
@@ -149,6 +169,7 @@ void init_cores(char** core_trace_file_names){
 		cores[i]->memory_pc_D = -1;
 		cores[i]->writeback_pc_D = -1;
 		cores[i]->halt_pc = -1;
+		cores[i]->core_stats_counts.cycles = -1;
 		FILE* curr_core_trace_fd;
 		curr_core_trace_fd = fopen(core_trace_file_names[i], "w");
 		fclose(curr_core_trace_fd);
@@ -317,13 +338,11 @@ void run_program(uint32_t* MM) {
 			}
 		}
 		write_core_trace_line(core_trace_fns);
-		for(int i =0;i < NUM_CORES;i++){
-			if (cores[i]->core_state_Q == Halt){
-				continue;
-			}
-			if (i == 1 && clk_cycles == 6)
+		for(int i =0;i < NUM_CORES;i++)
+		{
+			if (cores[i]->core_state_Q == Halt)
 			{
-				printf("");
+				continue;
 			}
 			if (VERBOSE_MODE) printf("$$$ core %d $$$\n",i);
 			handle_core_to_bus_requests(cores[i]);
@@ -334,6 +353,7 @@ void run_program(uint32_t* MM) {
 			memory(cores[i],caches[i], &bus, watch);
 			if(writeBack(cores[i])==Halt){
 				cores_running--;
+				cores[i]->core_stats_counts.cycles = clk_cycles+1;
 			}
 		}
 		

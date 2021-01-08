@@ -44,8 +44,8 @@ void write_mem_out(uint32_t* mem, char* fname)
     fclose(memout_fd);
 }
 
-
 int main(int argc, char* argv[]){
+    char* memin_fname;
     char* memout_fname;
     /*set instruction memories*/
     char* inst_mems_file_names[NUM_CORES];
@@ -54,12 +54,13 @@ int main(int argc, char* argv[]){
     char* bus_trace_file_name;
     char* dsram_file_names[NUM_CORES];
     char* tsram_file_names[NUM_CORES];
+    char* stats_file_names[NUM_CORES];
     if (argc == 28)
     {
         for (int i = 0; i < NUM_CORES; i++) {
             inst_mems_file_names[i] = argv[i+1];
         }
-        init_main_memory(argv[5]);
+        memin_fname = argv[5];
         memout_fname = argv[6];
         for (int i = 0; i < NUM_CORES; i++) {
             regout_file_names[i] = argv[i + 7];
@@ -74,6 +75,9 @@ int main(int argc, char* argv[]){
         for (int i = 0; i < NUM_CORES; i++) {
             tsram_file_names[i] = argv[i + 20];
         }
+        for (int i = 0; i < NUM_CORES; i++) {
+            stats_file_names[i] = argv[i + 24];
+        }
     }
     else
     {
@@ -81,7 +85,7 @@ int main(int argc, char* argv[]){
         inst_mems_file_names[1] = "imem1.txt";
         inst_mems_file_names[2] = "imem2.txt";
         inst_mems_file_names[3] = "imem3.txt";
-        init_main_memory("memin.txt");
+        memin_fname = "memin.txt";
         memout_fname = "memout.txt";
         regout_file_names[0] = "regout0.txt";
         regout_file_names[1] = "regout1.txt";
@@ -100,12 +104,13 @@ int main(int argc, char* argv[]){
         tsram_file_names[1] = "tsram1.txt";
         tsram_file_names[2] = "tsram2.txt";
         tsram_file_names[3] = "tsram3.txt";
-        //inst_mems_file_names[23] = "stats0.txt";
-        //inst_mems_file_names[24] = "stats1.txt";
-        //inst_mems_file_names[25] = "stats2.txt";
-        //inst_mems_file_names[26] = "stats3.txt";
+        stats_file_names[0] = "stats0.txt";
+        stats_file_names[1] = "stats1.txt";
+        stats_file_names[2] = "stats2.txt";
+        stats_file_names[3] = "stats3.txt";
     }
     clk_cycles = 0;
+    init_main_memory(memin_fname);
     init_bus(bus_trace_file_name);
     init_cores(core_trace_file_names);
     load_inst_mems(inst_mems_file_names);
@@ -116,6 +121,7 @@ int main(int argc, char* argv[]){
     write_core_regs_files(regout_file_names);
     write_core_dsram_files(dsram_file_names);
     write_core_tsram_files(tsram_file_names);
+    write_core_stats_files(stats_file_names);
 
     return 0;
 }
