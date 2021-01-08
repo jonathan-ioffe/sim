@@ -40,7 +40,7 @@ int32_t get_data_from_cache(Cache* cache, uint32_t addr)
 	return cache->cache[get_cache_index(addr)].data;
 }
 
-void set_data_to_cache(Cache* cache, uint32_t addr, int32_t data, unsigned short is_dirty)
+void set_data_to_cache(Cache* cache, uint32_t addr, int32_t data, bool is_dirty)
 {
 	unsigned short index = get_cache_index(addr);
 	cache->cache[index].tag = get_cache_tag(addr);

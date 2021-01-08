@@ -16,6 +16,7 @@ typedef struct bus {
 Bus bus;
 
 void bus_next_cycle();
+void init_bus(char* bus_trace_file_name);
 bool is_bus_pending_flush(Bus* bus);
 bool is_bus_pending_data(Bus* bus);
 bool is_bus_free(Bus* bus);

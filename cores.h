@@ -16,6 +16,10 @@
 #define HEX_INST_LEN  10
 #define MAIN_MEMORY_FETCH_DELAY 64
 #define BUS_FETCH_DELAY 64
+
+#define IMM_REG_IDX 1
+#define JAL_REG_IDX 15
+
 #include "bus.h"
 typedef struct instruction{
 	int opcode;
@@ -83,7 +87,6 @@ typedef struct core{
     struct EX_MEM_Reg ex_mem;
     struct MEM_WB_Reg mem_wb;
     bool regs_to_write_D[NUM_REGS], regs_to_write_Q[NUM_REGS];
-    int regs_to_write_pc_invoked[NUM_REGS];
     enum State core_state_Q, core_state_D;
     enum State fetch;
     enum State decode;
@@ -132,13 +135,9 @@ typedef struct cache{
 
 
 
-void init_cores(char** core_trace_file_names);
-void init_bus(char* bus_trace_file_name);
+void init_cores(char** core_trace_file_names, char** regout_file_names, char** dsram_file_names, char** tsram_file_names, char** stats_file_names);
 void load_inst_mems(char** inst_mems_file_names);
-void write_core_regs_files(char** regout_file_names);
-void write_core_dsram_files(char** dsram_file_names);
-void write_core_tsram_files(char** tsram_file_names);
-void write_core_stats_files(char** stats_file_names);
+void write_cores_output_files();
 void run_program(uint32_t* MM);
 
 

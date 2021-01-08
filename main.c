@@ -112,16 +112,12 @@ int main(int argc, char* argv[]){
     clk_cycles = 0;
     init_main_memory(memin_fname);
     init_bus(bus_trace_file_name);
-    init_cores(core_trace_file_names);
+    init_cores(core_trace_file_names, regout_file_names, dsram_file_names, tsram_file_names, stats_file_names);
     load_inst_mems(inst_mems_file_names);
 
-    /*set main memory*/
     run_program(MainMemory);
     write_mem_out(MainMemory, memout_fname);
-    write_core_regs_files(regout_file_names);
-    write_core_dsram_files(dsram_file_names);
-    write_core_tsram_files(tsram_file_names);
-    write_core_stats_files(stats_file_names);
+    write_cores_output_files();
 
     return 0;
 }

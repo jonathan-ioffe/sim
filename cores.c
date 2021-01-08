@@ -10,24 +10,12 @@ struct WatchFlag* watch[NUM_CORES];
 int cores_running = 4;
 int main_memory_stalls_left = MAIN_MEMORY_FETCH_DELAY;
 char** core_trace_fns;
+char** regout_fns;
+char** dsram_fns;
+char** tsram_fns;
+char** stats_fns;
 
-void write_core_regs_files(char** regout_file_names)
-{
-	for (int i = 0; i < NUM_CORES; i++)
-	{
-		FILE* curr_regout_fd;
-
-		curr_regout_fd = fopen(regout_file_names[i], "w");
-
-		for (int j = 2; j < NUM_REGS; j++)
-		{
-			fprintf(curr_regout_fd, "%08X\n", cores[i]->regs[j]);
-		}
-		fclose(curr_regout_fd);
-	}
-}
-
-void write_core_trace_line(char** core_trace_file_names)
+void write_core_trace_line()
 {
 	for (int i = 0; i < NUM_CORES; i++)
 	{
@@ -35,7 +23,7 @@ void write_core_trace_line(char** core_trace_file_names)
 			continue;
 		}
 		FILE* curr_core_trace_fd;
-		curr_core_trace_fd = fopen(core_trace_file_names[i], "a");
+		curr_core_trace_fd = fopen(core_trace_fns[i], "a");
 
 		int curr_pcs[5] = {
 			cores[i]->fetch_pc_Q,
@@ -80,13 +68,29 @@ void write_core_trace_line(char** core_trace_file_names)
 	}
 }
 
-void write_core_dsram_files(char** dsram_file_names)
+void write_core_regs_files()
+{
+	for (int i = 0; i < NUM_CORES; i++)
+	{
+		FILE* curr_regout_fd;
+
+		curr_regout_fd = fopen(regout_fns[i], "w");
+
+		for (int j = 2; j < NUM_REGS; j++)
+		{
+			fprintf(curr_regout_fd, "%08X\n", cores[i]->regs[j]);
+		}
+		fclose(curr_regout_fd);
+	}
+}
+
+void write_core_dsram_files()
 {
 	for (int i = 0; i < NUM_CORES; i++)
 	{
 		FILE* curr_dsram_fd;
 
-		curr_dsram_fd = fopen(dsram_file_names[i], "w");
+		curr_dsram_fd = fopen(dsram_fns[i], "w");
 
 		for (int j = 0; j < CACHE_SIZE; j++)
 		{
@@ -96,13 +100,13 @@ void write_core_dsram_files(char** dsram_file_names)
 	}
 }
 
-void write_core_tsram_files(char** tsram_file_names)
+void write_core_tsram_files()
 {
 	for (int i = 0; i < NUM_CORES; i++)
 	{
 		FILE* curr_tsram_fd;
 
-		curr_tsram_fd = fopen(tsram_file_names[i], "w");
+		curr_tsram_fd = fopen(tsram_fns[i], "w");
 
 		for (int j = 0; j < CACHE_SIZE; j++)
 		{
@@ -112,13 +116,13 @@ void write_core_tsram_files(char** tsram_file_names)
 	}
 }
 
-void write_core_stats_files(char** stats_file_names)
+void write_core_stats_files()
 {
 	for (int i = 0; i < NUM_CORES; i++)
 	{
 		FILE* curr_stats_fd;
 
-		curr_stats_fd = fopen(stats_file_names[i], "w");
+		curr_stats_fd = fopen(stats_fns[i], "w");
 
 		fprintf(curr_stats_fd, "cycles %d\n", cores[i]->core_stats_counts.cycles);
 		fprintf(curr_stats_fd, "instructions %d\n", cores[i]->core_stats_counts.instructions);
@@ -131,6 +135,14 @@ void write_core_stats_files(char** stats_file_names)
 
 		fclose(curr_stats_fd);
 	}
+}
+
+void write_cores_output_files()
+{
+	write_core_regs_files();
+	write_core_dsram_files();
+	write_core_tsram_files();
+	write_core_stats_files();
 }
 
 void init_pipe(int core_num){
@@ -146,11 +158,13 @@ void init_pipe(int core_num){
 	cores[core_num]->next_cycle_writeback = Stall;
 }
 
-void init_cores(char** core_trace_file_names){
+void init_cores(char** core_trace_file_names, char** regout_file_names, char** dsram_file_names, char** tsram_file_names, char** stats_file_names)
+{
     if (VERBOSE_MODE) printf("Start init cores\n");
-    for(int i=0;i<NUM_CORES;i++){
+    for(int i=0;i<NUM_CORES;i++)
+	{
         cores[i] = (Core*)calloc(1,sizeof(Core));
-        cores[i]-> core_state_Q = Active; /*activate cores*/
+        cores[i]->core_state_Q = Active; /*activate cores*/
 		cores[i]->core_state_D = Active; /*activate cores*/
 		cores[i]->pending_bus_read = Free;
         cores[i]->core_id = i;
@@ -159,24 +173,33 @@ void init_cores(char** core_trace_file_names){
         caches[i] = (Cache*)calloc(1,sizeof(Cache));
         watch[i] = (struct WatchFlag*)calloc(1,sizeof(struct WatchFlag));
 		cores[i]->fetch_pc_Q = 0;
-		cores[i]->decode_pc_Q = -1;
-		cores[i]->execute_pc_Q = -1;
-		cores[i]->memory_pc_Q = -1;
-		cores[i]->writeback_pc_Q = -1;
+		cores[i]->decode_pc_Q = NOT_INITIALIZED;
+		cores[i]->execute_pc_Q = NOT_INITIALIZED;
+		cores[i]->memory_pc_Q = NOT_INITIALIZED;
+		cores[i]->writeback_pc_Q = NOT_INITIALIZED;
 		cores[i]->fetch_pc_D = 0;
-		cores[i]->decode_pc_D = -1;
-		cores[i]->execute_pc_D = -1;
-		cores[i]->memory_pc_D = -1;
-		cores[i]->writeback_pc_D = -1;
-		cores[i]->halt_pc = -1;
-		cores[i]->core_stats_counts.cycles = -1;
+		cores[i]->decode_pc_D = NOT_INITIALIZED;
+		cores[i]->execute_pc_D = NOT_INITIALIZED;
+		cores[i]->memory_pc_D = NOT_INITIALIZED;
+		cores[i]->writeback_pc_D = NOT_INITIALIZED;
+		cores[i]->halt_pc = NOT_INITIALIZED;
+		cores[i]->core_stats_counts.cycles = NOT_INITIALIZED;
+		cores[i]->if_id.Q_inst = NOT_INITIALIZED;
+		cores[i]->id_ex.Q_inst = NOT_INITIALIZED;
+		cores[i]->ex_mem.Q_inst = NOT_INITIALIZED;
+		cores[i]->mem_wb.Q_inst = NOT_INITIALIZED;
 		FILE* curr_core_trace_fd;
 		curr_core_trace_fd = fopen(core_trace_file_names[i], "w");
 		fclose(curr_core_trace_fd);
     }
+
 	core_trace_fns = core_trace_file_names;
+	regout_fns = regout_file_names;
+	dsram_fns = dsram_file_names;
+	tsram_fns = tsram_file_names;
+	stats_fns = stats_file_names;
+
 	if (VERBOSE_MODE) printf("Init cores done\n");
-    return;
 }
 
 void load_inst_mems(char** inst_mems_file_names){
@@ -337,7 +360,7 @@ void run_program(uint32_t* MM) {
 				main_memory_stalls_left--;
 			}
 		}
-		write_core_trace_line(core_trace_fns);
+		write_core_trace_line();
 		for(int i =0;i < NUM_CORES;i++)
 		{
 			if (cores[i]->core_state_Q == Halt)
@@ -350,8 +373,9 @@ void run_program(uint32_t* MM) {
 			fetch(cores[i],inst_mems[i]);
 			decode(cores[i]);
 			execute(cores[i]);
-			memory(cores[i],caches[i], &bus, watch);
-			if(writeBack(cores[i])==Halt){
+			memory(cores[i],caches[i], watch);
+			if(!writeBack(cores[i]))
+			{
 				cores_running--;
 				cores[i]->core_stats_counts.cycles = clk_cycles+1;
 			}
