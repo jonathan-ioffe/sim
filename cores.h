@@ -33,6 +33,7 @@ struct WatchFlag{
 };
 
 enum State {Active, Stall, Halt};
+enum BusReadState {Free, MadeRd, MadeRdX, MadeFlush, Pending, Ready};
 
 struct IF_ID_Reg{
 	uint32_t D_inst;
@@ -71,9 +72,11 @@ typedef struct core{
     struct ID_EX_Reg id_ex;
     struct EX_MEM_Reg ex_mem;
     struct MEM_WB_Reg mem_wb;
-    int regs_to_write[NUM_REGS];
+    bool regs_to_write_D[NUM_REGS];
+    bool regs_to_write_Q[NUM_REGS];
     int regs_to_write_pc_invoked[NUM_REGS];
-    enum State core_state;
+    enum State core_state_Q;
+    enum State core_state_D;
     enum State fetch;
     enum State decode;
     enum State execute;
@@ -84,22 +87,22 @@ typedef struct core{
     enum State next_cycle_execute;
     enum State next_cycle_memory;
     enum State next_cycle_writeback;
-    int fetch_pc;
-    int decode_pc;
-    int execute_pc;
-    int memory_pc;
-    int writeback_pc;
-    int promote_fetch_pc;
-    int promote_decode_pc;
-    int promote_execute_pc;
-    int promote_memory_pc;
-    int promote_writeback_pc;
+    uint32_t fetch_pc_Q, fetch_pc_D;
+    uint32_t decode_pc_Q, decode_pc_D;
+    uint32_t execute_pc_Q, execute_pc_D;
+    uint32_t memory_pc_Q, memory_pc_D;
+    uint32_t writeback_pc_Q, writeback_pc_D;
+    uint32_t halt_pc;
 
-    int pending_bus_read; /* 0 - not pending, 1 - BusRd, 2 - BusRdX */
-    int pending_bus_read_addr;
+ /*   enum BusReadState pending_bus_read_D, pending_bus_read_Q;
+    uint32_t pending_bus_read_addr_D, pending_bus_read_addr_Q;
+    int32_t pending_bus_read_data_D, pending_bus_read_data_Q;*/
+    enum BusReadState pending_bus_read;
+    uint32_t pending_bus_read_addr;
+    int32_t pending_bus_read_data;
 
     bool is_data_stall;
-
+    bool is_data_hazard;
 }Core;
 
 enum MSI{I/*Invalid*/, S/*Shared*/, M/*Modified*/};

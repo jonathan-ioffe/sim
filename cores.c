@@ -31,19 +31,19 @@ void write_core_trace_line(char** core_trace_file_names)
 {
 	for (int i = 0; i < NUM_CORES; i++)
 	{
-		if (cores[i]->core_state == Halt) {
+		if (cores[i]->core_state_Q == Halt) {
 			continue;
 		}
 		FILE* curr_core_trace_fd;
 		curr_core_trace_fd = fopen(core_trace_file_names[i], "a");
 
-		int curr_pcs[5];
-
-		curr_pcs[0] = cores[i]->fetch == Active ? cores[i]->fetch_pc : -1;
-		curr_pcs[1] = cores[i]->decode == Active ? cores[i]->decode_pc : -1;
-		curr_pcs[2] = cores[i]->execute == Active ? cores[i]->execute_pc : -1;
-		curr_pcs[3] = cores[i]->memory == Active ? cores[i]->memory_pc : -1;
-		curr_pcs[4] = cores[i]->writeback == Active ? cores[i]->writeback_pc : -1;
+		int curr_pcs[5] = {
+			cores[i]->fetch_pc_Q,
+			cores[i]->decode_pc_Q == cores[i]->execute_pc_Q ? -1 : cores[i]->decode_pc_Q,
+			cores[i]->execute_pc_Q == cores[i]->memory_pc_Q ? -1 : cores[i]->execute_pc_Q,
+			cores[i]->memory_pc_Q == cores[i]->writeback_pc_Q ? -1 : cores[i]->memory_pc_Q,
+			cores[i]->writeback_pc_Q
+		};
 
 		int write_line = 0;
 		for (int j = 0; j < 5; j++)
@@ -60,7 +60,7 @@ void write_core_trace_line(char** core_trace_file_names)
 			fprintf(curr_core_trace_fd, "%d ", clk_cycles);
 			for (int j = 0; j < 5; j++)
 			{
-				if (curr_pcs[j] == -1)
+				if (curr_pcs[j] == -1 || curr_pcs[j] >= cores[i]->halt_pc)
 				{
 					fprintf(curr_core_trace_fd, "--- ");
 				}
@@ -97,12 +97,25 @@ void init_cores(char** core_trace_file_names){
     if (VERBOSE_MODE) printf("Start init cores\n");
     for(int i=0;i<NUM_CORES;i++){
         cores[i] = (Core*)calloc(1,sizeof(Core));
-        cores[i]-> core_state = Active; /*activate cores*/
-        cores[i]->core_id = i ;
+        cores[i]-> core_state_Q = Active; /*activate cores*/
+		cores[i]->core_state_D = Active; /*activate cores*/
+		cores[i]->pending_bus_read = Free;
+        cores[i]->core_id = i;
         init_pipe(i);
         inst_mems[i] = (IM*)calloc(1,sizeof(IM));
         caches[i] = (Cache*)calloc(1,sizeof(Cache));
         watch[i] = (struct WatchFlag*)calloc(1,sizeof(struct WatchFlag));
+		cores[i]->fetch_pc_Q = 0;
+		cores[i]->decode_pc_Q = -1;
+		cores[i]->execute_pc_Q = -1;
+		cores[i]->memory_pc_Q = -1;
+		cores[i]->writeback_pc_Q = -1;
+		cores[i]->fetch_pc_D = 0;
+		cores[i]->decode_pc_D = -1;
+		cores[i]->execute_pc_D = -1;
+		cores[i]->memory_pc_D = -1;
+		cores[i]->writeback_pc_D = -1;
+		cores[i]->halt_pc = -1;
 		FILE* curr_core_trace_fd;
 		curr_core_trace_fd = fopen(core_trace_file_names[i], "w");
 		fclose(curr_core_trace_fd);
@@ -125,7 +138,43 @@ void load_inst_mems(char** inst_mems_file_names){
 	}
 }
 
-void cores_next_cycle(){
+void handle_core_to_bus_requests(Core* core)
+{
+	if (core->pending_bus_read != Free)
+	{
+		if (is_bus_free(&bus))
+		{
+			if (core->pending_bus_read == MadeRd)
+			{
+				make_BusRd_request(&bus, core->core_id, core->pending_bus_read_addr);
+			}
+			else if (core->pending_bus_read == MadeRdX)
+			{
+				make_BusRdX_request(&bus, core->core_id, core->pending_bus_read_addr);
+			}
+			else if (core->pending_bus_read == MadeFlush)
+			{
+				make_Flush_request(&bus, core->core_id, core->pending_bus_read_addr, core->pending_bus_read_data);
+			}
+			core->pending_bus_read = Pending;
+		}
+		if (is_bus_pending_flush(&bus))
+		{
+			if (core->core_id == bus.bus_origid_Q)
+			{
+				core->pending_bus_read = Free;
+			}
+			else if (core->pending_bus_read == Pending && core->pending_bus_read_addr == bus.bus_addr_Q)
+			{
+				core->pending_bus_read = Ready;
+				core->pending_bus_read_data = bus.bus_data_Q;
+			}
+		}
+	}
+}
+
+void cores_next_cycle()
+{
 	for(int i=0;i<NUM_CORES;i++){
 		cores[i]->if_id.Q_inst = cores[i]->if_id.D_inst;
 		cores[i]->id_ex.Q_inst = cores[i]->id_ex.D_inst;
@@ -139,30 +188,44 @@ void cores_next_cycle(){
 		cores[i]->memory = cores[i]->next_cycle_memory;
 		cores[i]->writeback = cores[i]->next_cycle_writeback;
 
-		cores[i]->writeback_pc = (cores[i]->promote_writeback_pc) ? cores[i]->memory_pc : -1;
-		cores[i]->memory_pc = (cores[i]->promote_memory_pc) ? cores[i]->execute_pc : -1; 
-		cores[i]->execute_pc = (cores[i]->promote_execute_pc) ? cores[i]->decode_pc : -1;
-		cores[i]->decode_pc = (cores[i]->promote_decode_pc) ? cores[i]->fetch_pc : -1;
-		cores[i]->fetch_pc = cores[i]->pc;
+		if (i == 2 && clk_cycles == 2)
+		{
+			printf("");
+		}
+
+		cores[i]->fetch_pc_D = cores[i]->pc;
+
+		cores[i]->fetch_pc_Q = cores[i]->fetch_pc_D;
+		cores[i]->decode_pc_Q = cores[i]->decode_pc_D;
+		cores[i]->execute_pc_Q = cores[i]->execute_pc_D;
+		cores[i]->memory_pc_Q = cores[i]->memory_pc_D;
+		cores[i]->writeback_pc_Q = cores[i]->writeback_pc_D;
+		cores[i]->core_state_Q = cores[i]->core_state_D;
+
+		/*cores[i]->pending_bus_read_Q = cores[i]->pending_bus_read_D;
+		cores[i]->pending_bus_read_addr_Q = cores[i]->pending_bus_read_addr_D;
+		cores[i]->pending_bus_read_data_Q = cores[i]->pending_bus_read_data_D;	*/
+
+		for (int j = 0; j < NUM_REGS; j++)
+		{
+			cores[i]->regs_to_write_Q[j] = cores[i]->regs_to_write_D[j];
+		}
 	}	
-	write_core_trace_line(core_trace_fns);
+	
 }
 
 void run_program(uint32_t* MM) {
 	if (VERBOSE_MODE) printf("Start running program\n");
-	int first_iter = 1;
-	while(cores_running > 0){
-		if (clk_cycles == 143)
-		{
-			printf("");
-		}
+	while (cores_running > 0)
+	{
 		if (is_bus_pending_flush(&bus))
 		{
 			MM[bus.bus_addr_Q] = bus.bus_data_Q;
-			/*if (bus.bus_origid_Q < NUM_CORES)
-			{
-				caches[bus.bus_origid_Q]->cache->state = bus.bus_cmd_Q == 1 ? S : I;
-			}*/
+			//if (bus.bus_origid_Q < NUM_CORES)
+			//{
+			//	//caches[bus.bus_origid_Q]->cache->state = bus.bus_cmd_Q == 1 ? S : I;
+			//	cores[bus.bus_origid_Q]->pending_bus_read = Free;
+			//}
 			free_bus_line(&bus);
 		}
 		else if (is_bus_pending_data(&bus))
@@ -220,12 +283,17 @@ void run_program(uint32_t* MM) {
 				main_memory_stalls_left--;
 			}
 		}
-		
+		write_core_trace_line(core_trace_fns);
 		for(int i =0;i < NUM_CORES;i++){
-			if (cores[i]->core_state == Halt){
+			if (cores[i]->core_state_Q == Halt){
 				continue;
 			}
+			if (i == 1 && clk_cycles == 6)
+			{
+				printf("");
+			}
 			if (VERBOSE_MODE) printf("$$$ core %d $$$\n",i);
+			handle_core_to_bus_requests(cores[i]);
 			//printf("pipe states: %d, %d, %d, %d, %d\n",cores[i]->fetch,cores[i]->decode,cores[i]->execute,cores[i]->memory,cores[i]->writeback);
 			fetch(cores[i],inst_mems[i]);
 			decode(cores[i]);
@@ -236,9 +304,14 @@ void run_program(uint32_t* MM) {
 			}
 		}
 		
-		clk_cycles++;
-		if (VERBOSE_MODE) printf("increment cycle %d\n", clk_cycles);
-		bus_next_cycle();
+	
+		
 		cores_next_cycle();
+		clk_cycles++;
+		bus_next_cycle();
+
+		if (VERBOSE_MODE) printf("increment cycle %d\n", clk_cycles);
 	}
 }
+
+
