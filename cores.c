@@ -96,6 +96,22 @@ void write_core_dsram_files(char** dsram_file_names)
 	}
 }
 
+void write_core_tsram_files(char** tsram_file_names)
+{
+	for (int i = 0; i < NUM_CORES; i++)
+	{
+		FILE* curr_tsram_fd;
+
+		curr_tsram_fd = fopen(tsram_file_names[i], "w");
+
+		for (int j = 0; j < CACHE_SIZE; j++)
+		{
+			fprintf(curr_tsram_fd, "%04X\n", (caches[i]->cache[j].state << 12) + caches[i]->cache[j].tag);
+		}
+		fclose(curr_tsram_fd);
+	}
+}
+
 
 void init_pipe(int core_num){
 	cores[core_num]->fetch = Active;
@@ -251,7 +267,7 @@ void run_program(uint32_t* MM) {
 			if (VERBOSE_MODE) printf("main stalls left: %d\n", main_memory_stalls_left);
 			if (main_memory_stalls_left == MAIN_MEMORY_FETCH_DELAY)
 			{
-				int found_in_core = 0;
+				bool found_in_core = false;
 				for (int i = 0; i < NUM_CORES; i++)
 				{
 					if (bus.bus_origid_Q == i)
@@ -265,22 +281,22 @@ void run_program(uint32_t* MM) {
 						make_Flush_request(&bus, i, addr, data);
 						if (bus.bus_cmd_Q == 2) /*busrdx*/
 						{
-							caches[i]->cache->tag = I;
+							caches[i]->cache[get_cache_index(bus.bus_addr_Q)].state = I;
 						}
 						else /* busrd */
 						{
-							caches[i]->cache->tag = S;
+							caches[i]->cache[get_cache_index(bus.bus_addr_Q)].state = S;
 						}
-						found_in_core = 1;
+						found_in_core = true;
 						break;
 					}
 					else if (is_data_in_cache(caches[i], addr) && bus.bus_cmd_Q == 2)
 					{
-						caches[i]->cache->tag = I;
+						caches[i]->cache[get_cache_index(bus.bus_addr_Q)].state = I;
 					}
 				}
 				/* invoke read from main memory next cycle*/
-				if (found_in_core == 0)
+				if (!found_in_core)
 				{
 					main_memory_stalls_left--;
 				}

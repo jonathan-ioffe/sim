@@ -53,6 +53,7 @@ int main(int argc, char* argv[]){
     char* core_trace_file_names[NUM_CORES];
     char* bus_trace_file_name;
     char* dsram_file_names[NUM_CORES];
+    char* tsram_file_names[NUM_CORES];
     if (argc == 28)
     {
         for (int i = 0; i < NUM_CORES; i++) {
@@ -69,6 +70,9 @@ int main(int argc, char* argv[]){
         bus_trace_file_name = argv[15];
         for (int i = 0; i < NUM_CORES; i++) {
             dsram_file_names[i] = argv[i + 16];
+        }
+        for (int i = 0; i < NUM_CORES; i++) {
+            tsram_file_names[i] = argv[i + 20];
         }
     }
     else
@@ -92,10 +96,10 @@ int main(int argc, char* argv[]){
         dsram_file_names[1] = "dsram1.txt";
         dsram_file_names[2] = "dsram2.txt";
         dsram_file_names[3] = "dsram3.txt";
-        //inst_mems_file_names[19] = "tsram0.txt";
-        //inst_mems_file_names[20] = "tsram1.txt";
-        //inst_mems_file_names[21] = "tsram2.txt";
-        //inst_mems_file_names[22] = "tsram3.txt";
+        tsram_file_names[0] = "tsram0.txt";
+        tsram_file_names[1] = "tsram1.txt";
+        tsram_file_names[2] = "tsram2.txt";
+        tsram_file_names[3] = "tsram3.txt";
         //inst_mems_file_names[23] = "stats0.txt";
         //inst_mems_file_names[24] = "stats1.txt";
         //inst_mems_file_names[25] = "stats2.txt";
@@ -107,15 +111,12 @@ int main(int argc, char* argv[]){
     load_inst_mems(inst_mems_file_names);
 
     /*set main memory*/
-    
     run_program(MainMemory);
     write_mem_out(MainMemory, memout_fname);
     write_core_regs_files(regout_file_names);
     write_core_dsram_files(dsram_file_names);
-    //sanity(); /*for debug*/
-    /*for(int k=0;k<30;k++){
-    	printf("%x, ",MainMemory[k]);
-    }*/
+    write_core_tsram_files(tsram_file_names);
+
     return 0;
 }
 
