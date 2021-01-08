@@ -80,6 +80,23 @@ void write_core_trace_line(char** core_trace_file_names)
 	}
 }
 
+void write_core_dsram_files(char** dsram_file_names)
+{
+	for (int i = 0; i < NUM_CORES; i++)
+	{
+		FILE* curr_dsram_fd;
+
+		curr_dsram_fd = fopen(dsram_file_names[i], "w");
+
+		for (int j = 0; j < CACHE_SIZE; j++)
+		{
+			fprintf(curr_dsram_fd, "%08X\n", caches[i]->cache[j].data);
+		}
+		fclose(curr_dsram_fd);
+	}
+}
+
+
 void init_pipe(int core_num){
 	cores[core_num]->fetch = Active;
 	cores[core_num]->decode = Stall;

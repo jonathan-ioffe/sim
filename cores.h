@@ -127,6 +127,7 @@ void init_bus(char* bus_trace_file_name);
 void sanity(); /*for debug*/
 void load_inst_mems(char** inst_mems_file_names);
 void write_core_regs_files(char** regout_file_names);
+void write_core_dsram_files(char** dsram_file_names);
 void run_program(uint32_t* MM);
 
 
