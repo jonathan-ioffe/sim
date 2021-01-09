@@ -219,23 +219,7 @@ void decode(Core* core){
 	/*check hazards*/
 	if((core->regs_to_write_Q[rs_index]) || (core->regs_to_write_Q[rt_index]) || (core->regs_to_write_Q[inst->rd_index] && inst->opcode == SW_OP))
 	{ /*hazard detected*/
-		if (VERBOSE_MODE) printf("hazard exists\n");
-		if (!core->is_data_stall) core->core_stats_counts.decode_stall++; // count decode stall only if it's not stalling because of memory hazard before
-		// stall the current step
-		core->pc= core->pc_prev;
-		core->if_id.D_inst = core->if_id.Q_inst;
-		core->decode_pc_D = core->decode_pc_Q;
-
-		// stall the next step
-		Instruction* nop_inst = (Instruction*)calloc(1,sizeof(Instruction));
-		nop_inst->opcode = NOP_OP;
-		core->id_ex.D_inst = nop_inst;
-		core->execute_pc_D = core->execute_pc_Q;
-
-		// report data hazard
-		core->is_data_hazard = true;
-		//core->memory_pc_D = core->memory_pc_Q;
-		//core->writeback_pc_D = core->writeback_pc_Q;
+		handle_data_hazard(core);
 		return;
 	}
 	else
@@ -415,33 +399,7 @@ void memory(Core* core,Cache* cache, struct WatchFlag** watch){
 	}
 	else
 	{
-		// there's memory stall, report it
-		core->is_data_stall = true;
-		core->core_stats_counts.mem_stall++;
-		// stal previous steps in pipe
-		core->pc = core->pc_prev;
-		core->if_id.D_inst = core->if_id.Q_inst;
-		core->id_ex.D_inst = core->id_ex.Q_inst;
-		core->ex_mem.D_inst = core->ex_mem.Q_inst;
-		core->ex_mem.D_alu_res = core->ex_mem.Q_alu_res;
-		core->execute_pc_D = core->execute_pc_Q;
-		core->decode_pc_D = core->decode_pc_Q;
-		// stall current & next steps in pipe
-		core->mem_wb.D_inst = (Instruction*)calloc(1, sizeof(Instruction));
-		core->mem_wb.D_inst->opcode = NOP_OP;
-		core->next_cycle_fetch = core->fetch;
-		core->next_cycle_decode = core->decode;
-		core->next_cycle_execute = core->execute;
-		core->next_cycle_memory = core->memory;
-		core->next_cycle_writeback = core->writeback;
-		core->writeback_pc_D = core->writeback_pc_Q;
-		core->memory_pc_D = core->memory_pc_Q;
-		
-		// stall the regs hazards FFs
-		for (int i = 0; i < NUM_REGS; i++)
-		{
-			core->regs_to_write_D[i] = core->regs_to_write_Q[i];
-		}
+		handle_memory_hazard(core);
 	}
 	core->next_cycle_writeback = Active;
 
@@ -467,7 +425,7 @@ bool writeBack(Core* core){
 	/*perform writeback*/
 	if (inst->opcode<=SRL_OP/*arit/logi*/ || inst->opcode == LW_OP || inst->opcode == LL_OP){
 		if (VERBOSE_MODE) printf("writing back value %x to reg number %d\n",inst->rd,inst->rd_index);
-		if(inst->rd_index!=0)
+		if(inst->rd_index)
 		{
 			core->regs[inst->rd_index] = inst->rd;
 		}
@@ -482,7 +440,7 @@ bool writeBack(Core* core){
 	if(inst->opcode == SC_OP)
 	{
 		if (VERBOSE_MODE) printf("writing back value %x to reg number %d\n",inst->rd,inst->rd_index);
-		if(inst->rd_index!=0)
+		if(inst->rd_index)
 		{
 			core->regs[inst->rd_index] = inst->rd;
 		}
@@ -495,23 +453,23 @@ bool writeBack(Core* core){
 		return false;
 	}
 	free(inst);
-	// if something stalled update the pcs
+	// if something stalled update the pcs so that if the cmd from one stage to the pipe is trainstioned to the next, then the pc will be -1 ('---' in trace)
 	if (core->memory_pc_Q == core->writeback_pc_Q || core->memory_pc_D == core->writeback_pc_D)
 	{
-		core->memory_pc_D = -1;
+		core->memory_pc_D = NOT_INITIALIZED;
 	}
 	if (core->execute_pc_Q == core->writeback_pc_Q || core->execute_pc_D == core->writeback_pc_D)
 	{
-		core->execute_pc_D = -1;
+		core->execute_pc_D = NOT_INITIALIZED;
 	}
 	if (core->decode_pc_Q == core->writeback_pc_Q || core->decode_pc_D == core->writeback_pc_D)
 	{
-		core->decode_pc_D = -1;
+		core->decode_pc_D = NOT_INITIALIZED;
 	}
 	if (core->writeback_pc_D == core->writeback_pc_Q)
 	
 	{
-		core->writeback_pc_D = -1;
+		core->writeback_pc_D = NOT_INITIALIZED;
 	}
 	if (VERBOSE_MODE) printf("----exit writeback----\n");
 	return true;

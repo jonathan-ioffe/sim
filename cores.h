@@ -137,6 +137,8 @@ typedef struct cache{
 
 void init_cores(char** core_trace_file_names, char** regout_file_names, char** dsram_file_names, char** tsram_file_names, char** stats_file_names);
 void load_inst_mems(char** inst_mems_file_names);
+void handle_data_hazard(Core* core);
+void handle_memory_hazard(Core* core);
 void write_cores_output_files();
 void run_program(uint32_t* MM);
 

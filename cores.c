@@ -15,6 +15,7 @@ char** dsram_fns;
 char** tsram_fns;
 char** stats_fns;
 
+// Handle file writes related to cores
 void write_core_trace_line()
 {
 	for (int i = 0; i < NUM_CORES; i++)
@@ -143,6 +144,60 @@ void write_cores_output_files()
 	write_core_dsram_files();
 	write_core_tsram_files();
 	write_core_stats_files();
+}
+
+// Handle stalls
+
+// make the stall when encountered in decode stage (data hazard)
+void handle_data_hazard(Core* core)
+{
+	if (VERBOSE_MODE) printf("hazard exists\n");
+	if (!core->is_data_stall) core->core_stats_counts.decode_stall++; // count decode stall only if it's not stalling because of memory hazard before
+	// stall the current step
+	core->pc = core->pc_prev;
+	core->if_id.D_inst = core->if_id.Q_inst;
+	core->decode_pc_D = core->decode_pc_Q;
+
+	// stall the next step
+	Instruction* nop_inst = (Instruction*)calloc(1, sizeof(Instruction));
+	nop_inst->opcode = NOP_OP;
+	core->id_ex.D_inst = nop_inst;
+	core->execute_pc_D = core->execute_pc_Q;
+
+	// report data hazard
+	core->is_data_hazard = true;
+}
+
+// make the stall when encountered in memory stage (waiting for data to arrive)
+void handle_memory_hazard(Core* core)
+{
+	// there's memory stall, report it
+	core->is_data_stall = true;
+	core->core_stats_counts.mem_stall++;
+	// stal previous steps in pipe
+	core->pc = core->pc_prev;
+	core->if_id.D_inst = core->if_id.Q_inst;
+	core->id_ex.D_inst = core->id_ex.Q_inst;
+	core->ex_mem.D_inst = core->ex_mem.Q_inst;
+	core->ex_mem.D_alu_res = core->ex_mem.Q_alu_res;
+	core->execute_pc_D = core->execute_pc_Q;
+	core->decode_pc_D = core->decode_pc_Q;
+	// stall current & next steps in pipe
+	core->mem_wb.D_inst = (Instruction*)calloc(1, sizeof(Instruction));
+	core->mem_wb.D_inst->opcode = NOP_OP;
+	core->next_cycle_fetch = core->fetch;
+	core->next_cycle_decode = core->decode;
+	core->next_cycle_execute = core->execute;
+	core->next_cycle_memory = core->memory;
+	core->next_cycle_writeback = core->writeback;
+	core->writeback_pc_D = core->writeback_pc_Q;
+	core->memory_pc_D = core->memory_pc_Q;
+
+	// stall the regs hazards FFs
+	for (int i = 0; i < NUM_REGS; i++)
+	{
+		core->regs_to_write_D[i] = core->regs_to_write_Q[i];
+	}
 }
 
 void init_pipe(int core_num){
