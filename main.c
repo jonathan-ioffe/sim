@@ -4,86 +4,25 @@
 #include "cores.h"
 #include "instruction.h"
 #include "bus.h"
+#include "main_memory.h"
 
-void init_main_memory(char* memfile){
-	for (int i=0;i< MAIN_MEMORY_SIZE;i++)
-    {
-		MainMemory[i]= 0;
-	}
-	char line[HEX_INST_LEN] = {0};
-	FILE* fd = fopen(memfile,"r");
-	int line_num = 0;
-	while (fscanf(fd, "%s\n", line) != EOF) 
-    {
-		MainMemory[line_num] = strtol(line, NULL, 16);
-		line_num++;
-	}
-	fclose(fd);
-}
+char* memin_fname;
+char* memout_fname;
+char* inst_mems_file_names[NUM_CORES];
+char* regout_file_names[NUM_CORES];
+char* core_trace_file_names[NUM_CORES];
+char* bus_trace_file_name;
+char* dsram_file_names[NUM_CORES];
+char* tsram_file_names[NUM_CORES];
+char* stats_file_names[NUM_CORES];
 
-void write_mem_out(uint32_t* mem, char* fname)
+void set_file_names(bool from_argv, char* argv[])
 {
-    FILE* memout_fd;
-
-    memout_fd = fopen(fname, "w");
-
-    int max_non_zero_mem = 0;
-    for (int i = 0; i < MAIN_MEMORY_SIZE; i++)
+    if (from_argv)
     {
-        if (mem[i] != 0)
-        {
-            max_non_zero_mem = i;
-        }
-    }
-
-    for (int i = 0; i <= max_non_zero_mem; i++)
-    {
-        fprintf(memout_fd, "%08X\n", mem[i]);
-    }
-
-    fclose(memout_fd);
-}
-
-void run_program()
-{
-    // init vars
-    main_memory_stalls_left = MAIN_MEMORY_FETCH_DELAY;
-    clk_cycles = 0;
-    cores_running = NUM_CORES;
-
-    if (VERBOSE_MODE) printf("Start running program\n");
-
-    while (cores_running > 0)
-    {
-        if (VERBOSE_MODE) printf("current cycle %d\n", clk_cycles);
-
-        // run one cycle of bus and cores
-        run_bus_cycle();
-        run_cores_cycle();
-
-        // prepares the bus and cores for the next cycle
-        cores_next_cycle();
-        bus_next_cycle();
-
-        clk_cycles++;
-    }
-}
-
-int main(int argc, char* argv[]){
-    char* memin_fname;
-    char* memout_fname;
-    /*set instruction memories*/
-    char* inst_mems_file_names[NUM_CORES];
-    char* regout_file_names[NUM_CORES];
-    char* core_trace_file_names[NUM_CORES];
-    char* bus_trace_file_name;
-    char* dsram_file_names[NUM_CORES];
-    char* tsram_file_names[NUM_CORES];
-    char* stats_file_names[NUM_CORES];
-    if (argc == 28)
-    {
+        // get filenames from argv
         for (int i = 0; i < NUM_CORES; i++) {
-            inst_mems_file_names[i] = argv[i+1];
+            inst_mems_file_names[i] = argv[i + 1];
         }
         memin_fname = argv[5];
         memout_fname = argv[6];
@@ -106,6 +45,7 @@ int main(int argc, char* argv[]){
     }
     else
     {
+        // set the default filenames
         inst_mems_file_names[0] = "imem0.txt";
         inst_mems_file_names[1] = "imem1.txt";
         inst_mems_file_names[2] = "imem2.txt";
@@ -134,18 +74,52 @@ int main(int argc, char* argv[]){
         stats_file_names[2] = "stats2.txt";
         stats_file_names[3] = "stats3.txt";
     }
-    
-    // init prigram
+}
+void init_program()
+{
     init_main_memory(memin_fname);
     init_bus(bus_trace_file_name);
     init_cores(inst_mems_file_names, core_trace_file_names, regout_file_names, dsram_file_names, tsram_file_names, stats_file_names);
+}
+void run_program()
+{
+    // init vars
+    clk_cycles = 0;
+    cores_running = NUM_CORES;
 
-    run_program();
+    if (VERBOSE_MODE) printf("Start running program\n");
 
+    while (cores_running > 0)
+    {
+        if (VERBOSE_MODE) printf("current cycle %d\n", clk_cycles);
+
+        // run one cycle of bus and cores
+        run_bus_cycle();
+        run_cores_cycle();
+
+        // prepares the bus and cores for the next cycle
+        cores_next_cycle();
+        bus_next_cycle();
+
+        clk_cycles++;
+    }
+}
+void finish_program()
+{
     // write output files
-    write_mem_out(MainMemory, memout_fname);
+    write_mem_out(memout_fname);
     write_cores_output_files();
+}
 
+int main(int argc, char* argv[])
+{
+    // if provided 27 arguments, use them as input/output file names
+    set_file_names(argc == 28, argv);
+    
+    init_program();
+    run_program();
+    finish_program();
+    
     return 0;
 }
 

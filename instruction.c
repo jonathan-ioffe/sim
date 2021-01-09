@@ -69,7 +69,6 @@ void branch_resolution(Core* core, Instruction* inst)
 	}
 	
 }
-
 // handle get/set data from memory (cache/bus). return true if could get it successfully
 bool get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, uint32_t addr, bool is_get, bool is_sc_cmd)
 {
@@ -189,7 +188,6 @@ void fetch(Core* core,IM* inst_mem){
 
 	if (VERBOSE_MODE) printf("----exit fetch----\n");
 }
-
 void decode(Core* core){
 	if (VERBOSE_MODE) printf("----enter decode----\n");
 	if (core->decode == Stall)
@@ -253,7 +251,6 @@ void decode(Core* core){
 	if (VERBOSE_MODE) printf("----exit decode----\n");
 
 }
-
 void execute(Core* core){
 	if (VERBOSE_MODE) printf("---- enter exectue----\n");
 	if (core->execute == Stall)
@@ -320,8 +317,8 @@ void execute(Core* core){
 	core->next_cycle_memory = Active;
 	if (VERBOSE_MODE) printf("---- exit execute----\n");
 }
-
-void memory(Core* core,Cache* cache, struct WatchFlag** watch){
+void memory(Core* core,Cache* cache, struct WatchFlag** watch)
+{
 	if (VERBOSE_MODE) printf("---- enter memory---\n");
 	if (core->memory == Stall)
 	{
@@ -406,8 +403,7 @@ void memory(Core* core,Cache* cache, struct WatchFlag** watch){
 
 	if (VERBOSE_MODE) printf("----exit memory----\n");
 }
-
-bool writeBack(Core* core){
+bool write_back(Core* core){
 	if (VERBOSE_MODE) printf("----enter writeback----\n");
 
 	if (core->writeback == Stall)
@@ -435,7 +431,7 @@ bool writeBack(Core* core){
 	else if(inst->opcode == JAL_OP)
 	{
 		if (VERBOSE_MODE) printf("writing back jal value %x to reg 15\n",inst->rd);
-		core->regs[JAL_OP] = core->pc-4;
+		core->regs[JAL_REG_IDX] = core->pc-4;
 		core->regs_to_write_D[JAL_REG_IDX] = false;
 	}
 	if(inst->opcode == SC_OP)

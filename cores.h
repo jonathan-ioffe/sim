@@ -8,11 +8,9 @@
 #ifndef CORES_H_
 #define CORES_H_
 #include "main.h"
-
 #define NUM_REGS 16
 #define IM_SIZE 1024
 #define CACHE_SIZE 256
-#define HEX_INST_LEN  10
 
 #define IMM_REG_IDX 1
 #define JAL_REG_IDX 15
@@ -104,9 +102,6 @@ typedef struct core{
     uint32_t writeback_pc_Q, writeback_pc_D;
     uint32_t halt_pc;
 
- /*   enum BusReadState pending_bus_read_D, pending_bus_read_Q;
-    uint32_t pending_bus_read_addr_D, pending_bus_read_addr_Q;
-    int32_t pending_bus_read_data_D, pending_bus_read_data_Q;*/
     enum BusReadState pending_bus_read;
     uint32_t pending_bus_read_addr;
     int32_t pending_bus_read_data;

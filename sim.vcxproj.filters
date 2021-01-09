@@ -30,6 +30,9 @@
     <ClCompile Include="cache.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="main_memory.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cores.h">
@@ -45,6 +48,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="main.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="main_memory.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

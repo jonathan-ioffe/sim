@@ -42,6 +42,6 @@ void fetch(Core* core,IM* inst_mem);
 void decode(Core* core);
 void execute(Core* core);
 void memory(Core* core, Cache* cache, struct WatchFlag** watch);
-bool writeBack(Core* core);
+bool write_back(Core* core);
 
 #endif /* INSTRUCTION_H_ */

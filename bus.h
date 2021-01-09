@@ -13,8 +13,9 @@ Bus bus;
 
 enum BusCmd {NoCommand, BudRd, BusRdX, Flush};
 
-void bus_next_cycle();
 void init_bus(char* bus_trace_file_name);
+void run_bus_cycle();
+void bus_next_cycle();
 bool is_bus_pending_flush(Bus* bus);
 bool is_bus_pending_data(Bus* bus);
 bool is_bus_free(Bus* bus);
@@ -24,5 +25,4 @@ void make_BusRd_request(Bus* bus, int core_idx, uint32_t addr);
 void make_BusRdX_request(Bus* bus, int core_idx, uint32_t addr);
 void make_Flush_request(Bus* bus, int core_idx, uint32_t addr, int32_t data);
 void free_bus_line(Bus* bus);
-void run_bus_cycle();
 #endif /* BUS_H_ */

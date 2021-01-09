@@ -1,6 +1,5 @@
 #include "cores.h"
 #include "instruction.h"
-#include "bus.h"
 #include "cache.h"
 Core* cores[NUM_CORES];
 IM* inst_mems[NUM_CORES];
@@ -18,7 +17,7 @@ void write_core_trace_line(int core_num)
 	FILE* curr_core_trace_fd;
 	curr_core_trace_fd = fopen(core_trace_fns[core_num], "a");
 
-	int curr_pcs[5] = {
+	int curr_pcs[5] = { // if stalled for a stage but no new command, eneter ---
 		cores[core_num]->fetch_pc_Q,
 		cores[core_num]->decode_pc_Q == cores[core_num]->execute_pc_Q ? -1 : cores[core_num]->decode_pc_Q,
 		cores[core_num]->execute_pc_Q == cores[core_num]->memory_pc_Q ? -1 : cores[core_num]->execute_pc_Q,
@@ -26,12 +25,13 @@ void write_core_trace_line(int core_num)
 		cores[core_num]->writeback_pc_Q
 	};
 
-	int write_line = 0;
+	// write a line for the current cycle only if the pipe is not empty
+	bool write_line = false;
 	for (int j = 0; j < 5; j++)
 	{
-		if (curr_pcs[j] != -1)
+		if (curr_pcs[j] != NOT_INITIALIZED)
 		{
-			write_line = 1;
+			write_line = true;
 			break;
 		}
 	}
@@ -41,16 +41,18 @@ void write_core_trace_line(int core_num)
 		fprintf(curr_core_trace_fd, "%d ", clk_cycles);
 		for (int j = 0; j < 5; j++)
 		{
-			if (curr_pcs[j] == -1 || curr_pcs[j] >= cores[core_num]->halt_pc)
+			// if the current stage has not command, or already halted print ---
+			if (curr_pcs[j] == NOT_INITIALIZED || curr_pcs[j] >= cores[core_num]->halt_pc)
 			{
 				fprintf(curr_core_trace_fd, "--- ");
 			}
+			// print the current stage's pc
 			else
 			{
 				fprintf(curr_core_trace_fd, "%03X ", curr_pcs[j]);
 			}
 		}
-
+		// write regs R2-R15
 		for (int j = 2; j < NUM_REGS; j++)
 		{
 			fprintf(curr_core_trace_fd, "%08X ", cores[core_num]->regs[j]);
@@ -60,7 +62,6 @@ void write_core_trace_line(int core_num)
 	fclose(curr_core_trace_fd);
 	
 }
-
 void write_core_regs_files()
 {
 	for (int i = 0; i < NUM_CORES; i++)
@@ -68,7 +69,7 @@ void write_core_regs_files()
 		FILE* curr_regout_fd;
 
 		curr_regout_fd = fopen(regout_fns[i], "w");
-
+		// write regs R2-R15
 		for (int j = 2; j < NUM_REGS; j++)
 		{
 			fprintf(curr_regout_fd, "%08X\n", cores[i]->regs[j]);
@@ -76,7 +77,6 @@ void write_core_regs_files()
 		fclose(curr_regout_fd);
 	}
 }
-
 void write_core_dsram_files()
 {
 	for (int i = 0; i < NUM_CORES; i++)
@@ -84,7 +84,7 @@ void write_core_dsram_files()
 		FILE* curr_dsram_fd;
 
 		curr_dsram_fd = fopen(dsram_fns[i], "w");
-
+		// write DSRAM in the cache of each core
 		for (int j = 0; j < CACHE_SIZE; j++)
 		{
 			fprintf(curr_dsram_fd, "%08X\n", caches[i]->cache[j].data);
@@ -92,7 +92,6 @@ void write_core_dsram_files()
 		fclose(curr_dsram_fd);
 	}
 }
-
 void write_core_tsram_files()
 {
 	for (int i = 0; i < NUM_CORES; i++)
@@ -100,7 +99,7 @@ void write_core_tsram_files()
 		FILE* curr_tsram_fd;
 
 		curr_tsram_fd = fopen(tsram_fns[i], "w");
-
+		// write TSRAM in the cache of each core
 		for (int j = 0; j < CACHE_SIZE; j++)
 		{
 			fprintf(curr_tsram_fd, "%08X\n", (caches[i]->cache[j].state << 12) + caches[i]->cache[j].tag);
@@ -108,9 +107,9 @@ void write_core_tsram_files()
 		fclose(curr_tsram_fd);
 	}
 }
-
 void write_core_stats_files()
 {
+	// write the statistics of each core
 	for (int i = 0; i < NUM_CORES; i++)
 	{
 		FILE* curr_stats_fd;
@@ -129,7 +128,6 @@ void write_core_stats_files()
 		fclose(curr_stats_fd);
 	}
 }
-
 void write_cores_output_files()
 {
 	write_core_regs_files();
@@ -139,10 +137,9 @@ void write_cores_output_files()
 }
 
 // Handle stalls
-
-// make the stall when encountered in decode stage (data hazard)
 void handle_data_hazard(Core* core)
 {
+	// make the stall when encountered in decode stage (data hazard)
 	if (VERBOSE_MODE) printf("hazard exists\n");
 	if (!core->is_data_stall) core->core_stats_counts.decode_stall++; // count decode stall only if it's not stalling because of memory hazard before
 	// stall the current step
@@ -159,9 +156,9 @@ void handle_data_hazard(Core* core)
 	// report data hazard
 	core->is_data_hazard = true;
 }
-// make the stall when encountered in memory stage (waiting for data to arrive)
 void handle_memory_hazard(Core* core)
 {
+	// make the stall when encountered in memory stage (waiting for data to arrive)
 	// there's memory stall, report it
 	core->is_data_stall = true;
 	core->core_stats_counts.mem_stall++;
@@ -222,7 +219,6 @@ void init_pipe(int core_num)
 	cores[core_num]->ex_mem.Q_inst = NOT_INITIALIZED;
 	cores[core_num]->mem_wb.Q_inst = NOT_INITIALIZED;
 }
-
 void init_imem(int core_num, char* inst_mem_fn)
 {
 	char line[HEX_INST_LEN] = { 0 };
@@ -236,7 +232,6 @@ void init_imem(int core_num, char* inst_mem_fn)
 	}
 	fclose(fd);
 }
-
 void init_cores(char** inst_mems_file_names, char** core_trace_file_names, char** regout_file_names, 
 	char** dsram_file_names, char** tsram_file_names, char** stats_file_names)
 {
@@ -249,7 +244,6 @@ void init_cores(char** inst_mems_file_names, char** core_trace_file_names, char*
 		cores[i]->pending_bus_read = Free;
         cores[i]->core_id = i;
 
-        //inst_mems[i] = (IM*)calloc(1,sizeof(IM));
         caches[i] = (Cache*)calloc(1,sizeof(Cache));
         watch[i] = (struct WatchFlag*)calloc(1,sizeof(struct WatchFlag));
 		cores[i]->halt_pc = NOT_INITIALIZED;
@@ -276,35 +270,45 @@ void init_cores(char** inst_mems_file_names, char** core_trace_file_names, char*
 	if (VERBOSE_MODE) printf("Init cores done\n");
 }
 
-// if a core needs to request/get something from the bus, this handles the ineraction with the bus
+
 void handle_core_to_bus_requests(Core* core)
 {
+	// if a core needs to request/get something from the bus, this handles the ineraction with the bus
 	if (core->pending_bus_read != Free)
 	{
+		// core wants to request something from/to bus
 		if (is_bus_free(&bus))
 		{
+			// the bus is free
 			if (core->pending_bus_read == MadeRd)
 			{
+				// make the regular read request
 				make_BusRd_request(&bus, core->core_id, core->pending_bus_read_addr);
 			}
 			else if (core->pending_bus_read == MadeRdX)
 			{
+				// make the exculsive read request
 				make_BusRdX_request(&bus, core->core_id, core->pending_bus_read_addr);
 			}
 			else if (core->pending_bus_read == MadeFlush)
 			{
+				// make the flush request
 				make_Flush_request(&bus, core->core_id, core->pending_bus_read_addr, core->pending_bus_read_data);
 			}
+			// now wait for bus to act
 			core->pending_bus_read = Pending;
 		}
 		if (is_bus_pending_flush(&bus))
 		{
+			// bus has a flush on it
 			if (core->core_id == bus.bus_origid_Q)
 			{
+				// the current core made the flush, free it's state
 				core->pending_bus_read = Free;
 			}
 			else if (core->pending_bus_read == Pending && core->pending_bus_read_addr == bus.bus_addr_Q)
 			{
+				// the current core was waiting for this flush, update it 
 				core->pending_bus_read = Ready;
 				core->pending_bus_read_data = bus.bus_data_Q;
 			}
@@ -327,7 +331,7 @@ void run_cores_cycle()
 		decode(cores[i]);
 		execute(cores[i]);
 		memory(cores[i], caches[i], watch);
-		if (!writeBack(cores[i]))
+		if (!write_back(cores[i]))
 		{
 			cores_running--;
 			cores[i]->core_stats_counts.cycles = clk_cycles + 1;
