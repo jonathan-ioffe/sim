@@ -7,7 +7,7 @@
 
 #define MAIN_MEMORY_SIZE 1048576 /*2^20*/
 #define MAIN_MEMORY_FETCH_DELAY 64
-#define VERBOSE_MODE true
+#define VERBOSE_MODE false
 #define NUM_CORES 4
 
 uint32_t MainMemory[MAIN_MEMORY_SIZE];
