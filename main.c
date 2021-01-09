@@ -5,19 +5,19 @@
 #include "instruction.h"
 #include "bus.h"
 
-uint32_t MainMemory[MAIN_MEMORY_SIZE];
-
 void init_main_memory(char* memfile){
-	for (int i=0;i< MAIN_MEMORY_SIZE;i++){
+	for (int i=0;i< MAIN_MEMORY_SIZE;i++)
+    {
 		MainMemory[i]= 0;
 	}
 	char line[HEX_INST_LEN] = {0};
 	FILE* fd = fopen(memfile,"r");
 	int line_num = 0;
-	while (fscanf(fd, "%s\n", line) != EOF) {
+	while (fscanf(fd, "%s\n", line) != EOF) 
+    {
 		MainMemory[line_num] = strtol(line, NULL, 16);
 		line_num++;
-		}
+	}
 	fclose(fd);
 }
 
@@ -42,6 +42,31 @@ void write_mem_out(uint32_t* mem, char* fname)
     }
 
     fclose(memout_fd);
+}
+
+void run_program()
+{
+    // init vars
+    main_memory_stalls_left = MAIN_MEMORY_FETCH_DELAY;
+    clk_cycles = 0;
+    cores_running = NUM_CORES;
+
+    if (VERBOSE_MODE) printf("Start running program\n");
+
+    while (cores_running > 0)
+    {
+        if (VERBOSE_MODE) printf("current cycle %d\n", clk_cycles);
+
+        // run one cycle of bus and cores
+        run_bus_cycle();
+        run_cores_cycle();
+
+        // prepares the bus and cores for the next cycle
+        cores_next_cycle();
+        bus_next_cycle();
+
+        clk_cycles++;
+    }
 }
 
 int main(int argc, char* argv[]){
@@ -109,13 +134,15 @@ int main(int argc, char* argv[]){
         stats_file_names[2] = "stats2.txt";
         stats_file_names[3] = "stats3.txt";
     }
-    clk_cycles = 0;
+    
+    // init prigram
     init_main_memory(memin_fname);
     init_bus(bus_trace_file_name);
-    init_cores(core_trace_file_names, regout_file_names, dsram_file_names, tsram_file_names, stats_file_names);
-    load_inst_mems(inst_mems_file_names);
+    init_cores(inst_mems_file_names, core_trace_file_names, regout_file_names, dsram_file_names, tsram_file_names, stats_file_names);
 
-    run_program(MainMemory);
+    run_program();
+
+    // write output files
     write_mem_out(MainMemory, memout_fname);
     write_cores_output_files();
 

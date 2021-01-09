@@ -31,6 +31,7 @@ int get_rd_idx(uint32_t inst)
 	return (inst & 0x00f00000) >> 20;
 }
 
+// check if branch is taken and update the pc if needed
 void branch_resolution(Core* core, Instruction* inst)
 {
 	bool taken = false;
@@ -55,7 +56,7 @@ void branch_resolution(Core* core, Instruction* inst)
 	case(BGE_OP):
 		taken = inst->rs >= inst->rt;
 		break;
-	case(JAL_OP): /* TODO - maybe not needed */
+	case(JAL_OP):
 		taken = true;
 		break;
 	}

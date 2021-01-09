@@ -3,17 +3,15 @@
 #include "main.h"
 
 typedef struct bus {
-	unsigned short bus_origid_D;
-	unsigned short bus_cmd_D;
-	uint32_t bus_addr_D;
-	int32_t bus_data_D;
-	unsigned short bus_origid_Q;
-	unsigned short bus_cmd_Q;
-	uint32_t bus_addr_Q;
-	int32_t bus_data_Q;
+	unsigned short bus_origid_Q, bus_origid_D;
+	enum BusCmd bus_cmd_Q, bus_cmd_D;
+	uint32_t bus_addr_Q, bus_addr_D;
+	int32_t bus_data_Q, bus_data_D;
 }Bus;
 
 Bus bus;
+
+enum BusCmd {NoCommand, BudRd, BusRdX, Flush};
 
 void bus_next_cycle();
 void init_bus(char* bus_trace_file_name);
@@ -26,5 +24,5 @@ void make_BusRd_request(Bus* bus, int core_idx, uint32_t addr);
 void make_BusRdX_request(Bus* bus, int core_idx, uint32_t addr);
 void make_Flush_request(Bus* bus, int core_idx, uint32_t addr, int32_t data);
 void free_bus_line(Bus* bus);
-
+void run_bus_cycle();
 #endif /* BUS_H_ */

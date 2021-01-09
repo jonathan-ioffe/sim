@@ -10,18 +10,16 @@
 #include "main.h"
 
 #define NUM_REGS 16
-#define NUM_CORES 4
 #define IM_SIZE 1024
 #define CACHE_SIZE 256
 #define HEX_INST_LEN  10
-#define MAIN_MEMORY_FETCH_DELAY 64
-#define BUS_FETCH_DELAY 64
 
 #define IMM_REG_IDX 1
 #define JAL_REG_IDX 15
 
 #include "bus.h"
-typedef struct instruction{
+typedef struct instruction
+{
 	int opcode;
 	uint32_t rd;
 	uint32_t rs;
@@ -30,7 +28,8 @@ typedef struct instruction{
 	int imm;
 }Instruction;
 
-struct WatchFlag{
+struct WatchFlag
+{
 	uint32_t address;
 	bool visited;
 	bool watching;
@@ -135,12 +134,12 @@ typedef struct cache{
 
 
 
-void init_cores(char** core_trace_file_names, char** regout_file_names, char** dsram_file_names, char** tsram_file_names, char** stats_file_names);
-void load_inst_mems(char** inst_mems_file_names);
+void init_cores(char** inst_mems_file_names, char** core_trace_file_names, char** regout_file_names, char** dsram_file_names, char** tsram_file_names, char** stats_file_names);
 void handle_data_hazard(Core* core);
 void handle_memory_hazard(Core* core);
 void write_cores_output_files();
-void run_program(uint32_t* MM);
+void run_cores_cycle();
+void cores_next_cycle();
 
 
 #endif /* CORES_H_ */

@@ -3,7 +3,7 @@
 #include "main.h"
 #include "cores.h"
 
-
+Cache* caches[NUM_CORES];
 unsigned short get_cache_index(uint32_t addr);
 uint32_t get_main_memory_addr(unsigned short index, unsigned short tag);
 bool is_data_in_cache(Cache* cache, uint32_t addr);
