@@ -39,7 +39,7 @@ void bus_next_cycle()
 
 bool is_bus_free(Bus* bus) 
 {
-	return bus->bus_cmd_Q == NoCommand;
+	return bus->bus_cmd_Q == NoCommand && bus->bus_cmd_D == NoCommand;
 }
 
 bool is_data_ready_from_bus(Bus* bus, int core_idx, uint32_t addr)

@@ -133,12 +133,13 @@ bool get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, uint3
 		}
 		else {
 			// the data is not on the bus yet
-			if (!core->is_data_stall && core->pending_bus_read == Free)
+			if (core->pending_bus_read == Free)
 			{
 				// not stalled already and the can ask from bus
 				unsigned short curr_cache_index = get_cache_index(addr);
 				
 				if (cache->cache[curr_cache_index].state == M)
+				//if (false)
 				{
 					// there's dirty data in cache (from other tag). flush it
 					unsigned short curr_cache_tag = cache->cache[curr_cache_index].tag;
@@ -173,7 +174,7 @@ void fetch(Core* core,IM* inst_mem){
 	if (VERBOSE_MODE) printf("----enter fetch----\n");
 
 	uint32_t inst = inst_mem->mem[core->pc]; // get instruction from memory
-	if (VERBOSE_MODE) printf("pc %d got instruction %x\n",core->pc,inst);
+	if (VERBOSE_MODE) printf("pc %d got instruction %08X\n",core->pc,inst);
 	core->if_id.D_inst = inst;
 	// count instruction only if fetched a new instruction. if already halted stop counting
 	if (core->pc_prev != core->pc && core->halt_pc == NOT_INITIALIZED) core->core_stats_counts.instructions++; 
@@ -214,7 +215,6 @@ void decode(Core* core){
 	inst->rs = core->regs[rs_index];
 	inst->rt = core->regs[rt_index];
 	if (VERBOSE_MODE) printf("opcode=%d, rd=%d, rs=%d,rt=%d\n", inst->opcode, rd_index, rs_index, rt_index);
-
 	/*check hazards*/
 	if((core->regs_to_write_Q[rs_index]) || (core->regs_to_write_Q[rt_index]) || (core->regs_to_write_Q[inst->rd_index] && inst->opcode == SW_OP))
 	{ /*hazard detected*/
