@@ -381,7 +381,6 @@ void memory(Core* core,Cache* cache, struct WatchFlag** watch)
 			/*sc successes*/
 			if (VERBOSE_MODE) printf("sc successes writing to memroy\n");
 			is_stall = !get_set_data_from_memory(core, inst, cache, alu_res, false, true);
-			inst->rd = 1;
 			for (int i = 0; i < NUM_CORES; i++)
 			{
 				if (i == core->core_id) continue;
