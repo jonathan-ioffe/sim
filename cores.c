@@ -276,6 +276,22 @@ void handle_core_to_bus_requests(Core* core)
 	// if a core needs to request/get something from the bus, this handles the ineraction with the bus
 	if (core->pending_bus_read != Free)
 	{
+		if (is_bus_pending_flush(&bus))
+		{
+			// bus has a flush on it
+			if (core->core_id == bus.bus_origid_Q)
+			{
+				// the current core made the flush, free it's state
+				core->pending_bus_read = Free;
+			}
+			else if (core->pending_bus_read == Pending && core->pending_bus_read_addr == bus.bus_addr_Q)
+			{
+				// the current core was waiting for this flush, update it 
+				core->pending_bus_read = Ready;
+				core->pending_bus_read_data = bus.bus_data_Q;
+			}
+			return;
+		}
 		// core wants to request something from/to bus
 		if (is_bus_free(&bus))
 		{
@@ -297,21 +313,6 @@ void handle_core_to_bus_requests(Core* core)
 			}
 			// now wait for bus to act
 			core->pending_bus_read = Pending;
-		}
-		if (is_bus_pending_flush(&bus))
-		{
-			// bus has a flush on it
-			if (core->core_id == bus.bus_origid_Q)
-			{
-				// the current core made the flush, free it's state
-				core->pending_bus_read = Free;
-			}
-			else if (core->pending_bus_read == Pending && core->pending_bus_read_addr == bus.bus_addr_Q)
-			{
-				// the current core was waiting for this flush, update it 
-				core->pending_bus_read = Ready;
-				core->pending_bus_read_data = bus.bus_data_Q;
-			}
 		}
 	}
 }
