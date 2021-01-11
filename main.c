@@ -113,6 +113,7 @@ void finish_program()
 
 int main(int argc, char* argv[])
 {
+    printf("Running 4-core simulator. will print=%d\n", VERBOSE_MODE);
     // if provided 27 arguments, use them as input/output file names
     set_file_names(argc == 28, argv);
     
