@@ -169,6 +169,18 @@ bool get_set_data_from_memory(Core* core, Instruction* inst, Cache* cache, uint3
 		}
 	}
 }
+// return true if the instruction write to registers (thus causing data hazard)
+bool is_dirty_inst(Instruction* inst) {
+	return inst->opcode <= SRL_OP || inst->opcode == LW_OP || inst->opcode == LL_OP || inst->opcode == SC_OP;
+}
+// check if there's a command going to write to the register we want to clear the hazard, if so don't clean
+bool is_register_wants_to_be_written(Core* core, int rd_index)
+{
+	Instruction* next_execute = core->id_ex.D_inst;
+	Instruction* next_memory = core->ex_mem.D_inst;
+	Instruction* next_write_back = core->mem_wb.D_inst;
+	return (next_execute->rd_index == rd_index && is_dirty_inst(next_execute)) || (next_memory->rd_index == rd_index && is_dirty_inst(next_memory)) || (next_write_back->rd_index == rd_index && is_dirty_inst(next_write_back));
+}
 
 void fetch(Core* core,IM* inst_mem){
 	if (VERBOSE_MODE) printf("----enter fetch----\n");
@@ -216,7 +228,7 @@ void decode(Core* core){
 	inst->rt = core->regs[rt_index];
 	if (VERBOSE_MODE) printf("opcode=%d, rd=%d, rs=%d,rt=%d\n", inst->opcode, rd_index, rs_index, rt_index);
 	/*check hazards*/
-	if((core->regs_to_write_Q[rs_index]) || (core->regs_to_write_Q[rt_index]) || (core->regs_to_write_Q[inst->rd_index] && inst->opcode == SW_OP))
+	if((core->regs_to_write_Q[rs_index]) || (core->regs_to_write_Q[rt_index]) || (core->regs_to_write_Q[inst->rd_index] && (inst->opcode == SW_OP || inst->opcode == SC_OP)))
 	{ /*hazard detected*/
 		handle_data_hazard(core);
 		return;
@@ -369,18 +381,17 @@ void memory(Core* core,Cache* cache, struct WatchFlag** watch)
 			/*sc successes*/
 			if (VERBOSE_MODE) printf("sc successes writing to memroy\n");
 			is_stall = !get_set_data_from_memory(core, inst, cache, alu_res, false, true);
-		}
-		for(int i=0;i<NUM_CORES;i++)
-		{
-			if(i == core->core_id) continue;
-			if(watch[i]->address == alu_res && watch[i]->watching)
+			inst->rd = 1;
+			for (int i = 0; i < NUM_CORES; i++)
 			{
-				watch[i]->visited = true;
-				if (VERBOSE_MODE) printf("sc on other core ll\n");
+				if (i == core->core_id) continue;
+				if (watch[i]->address == alu_res && watch[i]->watching)
+				{
+					watch[i]->visited = true;
+					if (VERBOSE_MODE) printf("sc on other core ll\n");
+				}
 			}
 		}
-
-
 	}
 	/*arithmetic/logic op*/
 	else if(inst->opcode <= SRL_OP)
@@ -426,7 +437,10 @@ bool write_back(Core* core){
 		{
 			core->regs[inst->rd_index] = inst->rd;
 		}
-		core->regs_to_write_D[inst->rd_index] = false; /*clean*/
+		if (!is_register_wants_to_be_written(core, inst->rd_index))
+		{
+			core->regs_to_write_D[inst->rd_index] = false; /*clean*/
+		}
 	}
 	else if(inst->opcode == JAL_OP)
 	{
@@ -441,7 +455,10 @@ bool write_back(Core* core){
 		{
 			core->regs[inst->rd_index] = inst->rd;
 		}
-		core->regs_to_write_D[inst->rd_index] = false; /*clean*/
+		if (!is_register_wants_to_be_written(core, inst->rd_index))
+		{
+			core->regs_to_write_D[inst->rd_index] = false; /*clean*/
+		}
 	}
 	if(inst->opcode == HALT_OP)
 	{
